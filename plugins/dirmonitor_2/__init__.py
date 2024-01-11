@@ -51,9 +51,9 @@ class FileMonitorHandler(FileSystemEventHandler):
                                 mon_path=self._watch_path, event_path=event.dest_path)
 
 
-class DirMonitor(_PluginBase):
+class DirMonitor_2(_PluginBase):
     # 插件名称
-    plugin_name = "目录监控"
+    plugin_name = "目录监控2"
     # 插件描述
     plugin_desc = "监控目录文件发生变化时实时整理到媒体库。"
     # 插件图标
@@ -61,11 +61,11 @@ class DirMonitor(_PluginBase):
     # 插件版本
     plugin_version = "1.5"
     # 插件作者
-    plugin_author = "jxxghp"
+    plugin_author = "mirrorhui"
     # 作者主页
-    author_url = "https://github.com/jxxghp"
+    author_url = "https://github.com/mirrorhui520"
     # 插件配置项ID前缀
-    plugin_config_prefix = "dirmonitor_"
+    plugin_config_prefix = "dirmonitor_2_"
     # 加载顺序
     plugin_order = 4
     # 可使用的用户级别
@@ -127,7 +127,8 @@ class DirMonitor(_PluginBase):
             # 定时服务管理器
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
             # 追加入库消息统一发送服务
-            self._scheduler.add_job(self.send_msg, trigger='interval', seconds=15)
+            self._scheduler.add_job(
+                self.send_msg, trigger='interval', seconds=15)
 
             # 读取目录配置
             monitor_dirs = self._monitor_dirs.split("\n")
@@ -171,8 +172,10 @@ class DirMonitor(_PluginBase):
                     # 检查媒体库目录是不是下载目录的子目录
                     try:
                         if target_path and target_path.is_relative_to(Path(mon_path)):
-                            logger.warn(f"{target_path} 是下载目录 {mon_path} 的子目录，无法监控")
-                            self.systemmessage.put(f"{target_path} 是下载目录 {mon_path} 的子目录，无法监控")
+                            logger.warn(
+                                f"{target_path} 是下载目录 {mon_path} 的子目录，无法监控")
+                            self.systemmessage.put(
+                                f"{target_path} 是下载目录 {mon_path} 的子目录，无法监控")
                             continue
                     except Exception as e:
                         logger.debug(str(e))
@@ -186,7 +189,8 @@ class DirMonitor(_PluginBase):
                             # 内部处理系统操作类型选择最优解
                             observer = Observer(timeout=10)
                         self._observer.append(observer)
-                        observer.schedule(FileMonitorHandler(mon_path, self), path=mon_path, recursive=True)
+                        observer.schedule(FileMonitorHandler(
+                            mon_path, self), path=mon_path, recursive=True)
                         observer.daemon = True
                         observer.start()
                         logger.info(f"{mon_path} 的目录监控服务启动")
@@ -202,7 +206,8 @@ class DirMonitor(_PluginBase):
                                      """)
                         else:
                             logger.error(f"{mon_path} 启动目录监控失败：{err_msg}")
-                        self.systemmessage.put(f"{mon_path} 启动目录监控失败：{err_msg}")
+                        self.systemmessage.put(
+                            f"{mon_path} 启动目录监控失败：{err_msg}")
 
             # 运行一次定时服务
             if self._onlyonce:
@@ -220,7 +225,8 @@ class DirMonitor(_PluginBase):
             if self._enabled and self._cron:
                 try:
                     self._scheduler.add_job(func=self.sync_all,
-                                            trigger=CronTrigger.from_crontab(self._cron),
+                                            trigger=CronTrigger.from_crontab(
+                                                self._cron),
                                             name="目录监控全量同步")
                 except Exception as err:
                     logger.error(f"定时任务配置错误：{str(err)}")
@@ -275,7 +281,8 @@ class DirMonitor(_PluginBase):
         for mon_path in self._dirconf.keys():
             # 遍历目录下所有文件
             for file_path in SystemUtils.list_files(Path(mon_path), settings.RMT_MEDIAEXT):
-                self.__handle_file(event_path=str(file_path), mon_path=mon_path)
+                self.__handle_file(event_path=str(
+                    file_path), mon_path=mon_path)
         logger.info("全量同步监控目录完成！")
 
     def event_handler(self, event, mon_path: str, text: str, event_path: str):
@@ -324,7 +331,8 @@ class DirMonitor(_PluginBase):
                             return
 
                 # 整理屏蔽词不处理
-                transfer_exclude_words = self.systemconfig.get(SystemConfigKey.TransferExcludeWords)
+                transfer_exclude_words = self.systemconfig.get(
+                    SystemConfigKey.TransferExcludeWords)
                 if transfer_exclude_words:
                     for keyword in transfer_exclude_words:
                         if not keyword:
@@ -365,7 +373,8 @@ class DirMonitor(_PluginBase):
                 # 查询转移方式
                 transfer_type = self._transferconf.get(mon_path)
                 # 根据父路径获取下载历史
-                download_history = self.downloadhis.get_by_path(Path(event_path).parent)
+                download_history = self.downloadhis.get_by_path(
+                    Path(event_path).parent)
 
                 # 识别媒体信息
                 mediainfo: MediaInfo = self.chain.recognize_media(meta=file_meta,
@@ -392,7 +401,8 @@ class DirMonitor(_PluginBase):
                                                                            mtype=mediainfo.type.value)
                     if transfer_history:
                         mediainfo.title = transfer_history.title
-                logger.info(f"{file_path.name} 识别为：{mediainfo.type.value} {mediainfo.title_year}")
+                logger.info(
+                    f"{file_path.name} 识别为：{mediainfo.type.value} {mediainfo.title_year}")
 
                 # 更新媒体图片
                 self.chain.obtain_images(mediainfo=mediainfo)
@@ -420,7 +430,8 @@ class DirMonitor(_PluginBase):
                     return
                 if not transferinfo.success:
                     # 转移失败
-                    logger.warn(f"{file_path.name} 入库失败：{transferinfo.message}")
+                    logger.warn(
+                        f"{file_path.name} 入库失败：{transferinfo.message}")
                     # 新增转移失败历史记录
                     self.transferhis.add_fail(
                         src_path=file_path,
@@ -471,7 +482,8 @@ class DirMonitor(_PluginBase):
                 }
                 """
                 # 发送消息汇总
-                media_list = self._medias.get(mediainfo.title_year + " " + file_meta.season) or {}
+                media_list = self._medias.get(
+                    mediainfo.title_year + " " + file_meta.season) or {}
                 if media_list:
                     media_files = media_list.get("files") or []
                     if media_files:
@@ -512,7 +524,8 @@ class DirMonitor(_PluginBase):
                         ],
                         "time": datetime.datetime.now()
                     }
-                self._medias[mediainfo.title_year + " " + file_meta.season] = media_list
+                self._medias[mediainfo.title_year +
+                             " " + file_meta.season] = media_list
 
                 # 广播事件
                 self.eventmanager.send_event(EventType.TransferComplete, {
@@ -527,7 +540,8 @@ class DirMonitor(_PluginBase):
                         if len(str(file_dir)) <= len(str(Path(mon_path))):
                             # 重要，删除到监控目录为止
                             break
-                        files = SystemUtils.list_files(file_dir, settings.RMT_MEDIAEXT)
+                        files = SystemUtils.list_files(
+                            file_dir, settings.RMT_MEDIAEXT)
                         if not files:
                             logger.warn(f"移动模式，删除空目录：{file_dir}")
                             shutil.rmtree(file_dir, ignore_errors=True)
@@ -717,7 +731,8 @@ class DirMonitor(_PluginBase):
                                             'model': 'mode',
                                             'label': '监控模式',
                                             'items': [
-                                                {'title': '兼容模式', 'value': 'compatibility'},
+                                                {'title': '兼容模式',
+                                                    'value': 'compatibility'},
                                                 {'title': '性能模式', 'value': 'fast'}
                                             ]
                                         }
@@ -740,9 +755,12 @@ class DirMonitor(_PluginBase):
                                                 {'title': '移动', 'value': 'move'},
                                                 {'title': '复制', 'value': 'copy'},
                                                 {'title': '硬链接', 'value': 'link'},
-                                                {'title': '软链接', 'value': 'softlink'},
-                                                {'title': 'Rclone复制', 'value': 'rclone_copy'},
-                                                {'title': 'Rclone移动', 'value': 'rclone_move'}
+                                                {'title': '软链接',
+                                                    'value': 'softlink'},
+                                                {'title': 'Rclone复制',
+                                                    'value': 'rclone_copy'},
+                                                {'title': 'Rclone移动',
+                                                    'value': 'rclone_move'}
                                             ]
                                         }
                                     }
