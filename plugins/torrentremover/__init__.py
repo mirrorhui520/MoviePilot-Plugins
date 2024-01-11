@@ -19,7 +19,7 @@ from app.utils.string import StringUtils
 lock = threading.Lock()
 
 
-class TorrentRemover(_PluginBase):
+class TorrentRemover2(_PluginBase):
     # 插件名称
     plugin_name = "自动删种2"
     # 插件描述
@@ -29,11 +29,11 @@ class TorrentRemover(_PluginBase):
     # 插件版本
     plugin_version = "1.1"
     # 插件作者
-    plugin_author = "jxxghp"
+    plugin_author = "mirrorhui"
     # 作者主页
-    author_url = "https://github.com/jxxghp"
+    author_url = "https://github.com/mirrorhui520"
     # 插件配置项ID前缀
-    plugin_config_prefix = "torrentremover_"
+    plugin_config_prefix = "torrentremover2_"
     # 加载顺序
     plugin_order = 8
     # 可使用的用户级别
