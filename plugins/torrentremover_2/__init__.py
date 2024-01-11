@@ -35,7 +35,7 @@ class torrentremover_2(_PluginBase):
     # 插件配置项ID前缀
     plugin_config_prefix = "torrentremover_2_"
     # 加载顺序
-    plugin_order = 8
+    plugin_order = 199
     # 可使用的用户级别
     auth_level = 2
 
