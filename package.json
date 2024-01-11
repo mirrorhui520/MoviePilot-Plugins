@@ -1,13 +1,13 @@
 {
-    "DirMonitor": {
-        "name": "目录监控",
+    "DirMonitor_2": {
+        "name": "目录监控2",
         "description": "监控目录文件发生变化时实时整理到媒体库。",
         "version": "1.5",
         "icon": "directory.png",
         "author": "mirrorhui",
         "level": 1
     },
-    "TorrentRemover2": {
+    "TorrentRemover_2": {
         "name": "自动删种2",
         "description": "自动删除下载器中的下载任务。",
         "version": "1.1",
