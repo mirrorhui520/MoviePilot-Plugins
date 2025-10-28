@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.event import eventmanager, Event
 from app.log import logger
 from app.plugins import _PluginBase
-from app.plugins.FFmpegThumb2.ffmpeg_helper import FfmpegHelper
+from app.plugins.FFmpegThumb2.ffmpeg_helper import FfmpegHelper2
 from app.schemas import TransferInfo
 from app.schemas.types import EventType
 from app.utils.system import SystemUtils
@@ -345,8 +345,8 @@ class FFmpegThumb2(_PluginBase):
                 if thumb_path.exists():
                     logger.info(f"缩略图已存在：{thumb_path}")
                     return
-                if FfmpegHelper.get_thumb(video_path=str(file_path),
-                                          image_path=str(thumb_path), frames=self._timeline):
+                if FfmpegHelper2.get_thumb(video_path=str(file_path),
+                                           image_path=str(thumb_path), frames=self._timeline):
                     logger.info(f"{file_path} 缩略图已生成：{thumb_path}")
             except Exception as err:
                 logger.error(f"FFmpeg处理文件 {file_path} 时发生错误：{str(err)}")
