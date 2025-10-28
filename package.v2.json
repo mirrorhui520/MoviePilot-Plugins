@@ -1,9 +1,9 @@
 {
-  "FFmpegThumb": {
+  "FFmpegThumb2": {
     "name": "FFmpeg缩略图2",
     "description": "TheMovieDb没有背景图片时使用FFmpeg截取视频文件缩略图",
     "labels": "刮削",
-    "version": "2.2",
+    "version": "2.1",
     "icon": "ffmpeg.png",
     "author": "mirrorhui520",
     "level": 1,

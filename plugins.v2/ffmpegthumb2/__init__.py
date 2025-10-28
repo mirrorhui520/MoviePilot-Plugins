@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.event import eventmanager, Event
 from app.log import logger
 from app.plugins import _PluginBase
-from app.plugins.ffmpegthumb.ffmpeg_helper import FfmpegHelper
+from app.plugins.FFmpegThumb2.ffmpeg_helper import FfmpegHelper
 from app.schemas import TransferInfo
 from app.schemas.types import EventType
 from app.utils.system import SystemUtils
@@ -20,7 +20,7 @@ from app.utils.system import SystemUtils
 ffmpeg_lock = threading.Lock()
 
 
-class FFmpegThumb(_PluginBase):
+class FFmpegThumb2(_PluginBase):
     # 插件名称
     plugin_name = "FFmpeg缩略图2"
     # 插件描述
@@ -28,13 +28,13 @@ class FFmpegThumb(_PluginBase):
     # 插件图标
     plugin_icon = "ffmpeg.png"
     # 插件版本
-    plugin_version = "2.2"
+    plugin_version = "2.1"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
     author_url = "https://github.com/mirrorhui520"
     # 插件配置项ID前缀
-    plugin_config_prefix = "ffmpegthumb_"
+    plugin_config_prefix = "FFmpegThumb2_"
     # 加载顺序
     plugin_order = 31
     # 可使用的用户级别
