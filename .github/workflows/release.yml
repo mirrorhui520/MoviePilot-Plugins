@@ -2,7 +2,7 @@ name: Plugin Release
 "on":
   push:
     paths:
-      # - 'package.json'
+      - 'package.json'
       - 'package.v2.json'
   workflow_dispatch:
 
