@@ -21,7 +21,7 @@ def _time_str_to_seconds(time_str: str) -> Optional[float]:
         return None
 
 
-class FfmpegHelper2:
+class FfmpegHelper:
     # 默认限制 ffmpeg 使用的线程数（根据机器调整）
     DEFAULT_THREADS = 1
     # 在目标时间前预seek多少秒（two-stage seek），用来减少解码量同时保留精度
@@ -73,7 +73,7 @@ class FfmpegHelper2:
             return False
 
         # 检查 ffmpeg 是否存在
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
@@ -90,7 +90,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(command, timeout=timeout)
+            return FfmpegHelper._run_cmd(command, timeout=timeout)
 
         # two-stage seek: preseek 到 max(0, secs - preseek_offset)，然后在输入后做 delta 精确 seek
         preseek_secs = max(0.0, secs - float(preseek_offset))
@@ -107,7 +107,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(command, timeout=timeout)
+            return FfmpegHelper._run_cmd(command, timeout=timeout)
 
         # two-stage: fast seek then accurate small seek
         # 注意参数顺序：-ss 前置在 -i 之前；第二个 -ss 在输入之后。
@@ -121,7 +121,7 @@ class FfmpegHelper2:
             "-threads", str(threads),
             image_path
         ]
-        ok = FfmpegHelper2._run_cmd(command, timeout=timeout)
+        ok = FfmpegHelper._run_cmd(command, timeout=timeout)
         # 若 two-stage 失败，可以回退到精确 seek（更慢但更可能成功）
         if not ok:
             fallback = [
@@ -133,7 +133,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(fallback, timeout=timeout)
+            return FfmpegHelper._run_cmd(fallback, timeout=timeout)
         return True
 
     @staticmethod
@@ -145,7 +145,7 @@ class FfmpegHelper2:
         """
         if not video_path or not audio_path:
             return False
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
@@ -156,7 +156,7 @@ class FfmpegHelper2:
 
         base += ["-acodec", "pcm_s16le", "-ac", "1", "-ar",
                  "16000", "-threads", str(threads), audio_path]
-        return FfmpegHelper2._run_cmd(base, timeout=timeout)
+        return FfmpegHelper._run_cmd(base, timeout=timeout)
 
     @staticmethod
     def get_metadata(video_path: str, timeout: int = DEFAULT_TIMEOUT):
@@ -165,7 +165,7 @@ class FfmpegHelper2:
         """
         if not video_path:
             return None
-        if not FfmpegHelper2._which("ffprobe"):
+        if not FfmpegHelper._which("ffprobe"):
             print("ffprobe not found in PATH")
             return None
         try:
@@ -189,7 +189,7 @@ class FfmpegHelper2:
         """
         if not video_path or not subtitle_path:
             return False
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
@@ -211,7 +211,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 subtitle_path
             ]
-        return FfmpegHelper2._run_cmd(command, timeout=timeout)
+        return FfmpegHelper._run_cmd(command, timeout=timeout)
 
 # 使用建议：
 # - 在 web 服务中不要直接在请求线程里同步调用这些方法（尤其是耗时的音频/字幕操作）。
@@ -220,5 +220,5 @@ class FfmpegHelper2:
 # 示例（简单）:
 # from concurrent.futures import ThreadPoolExecutor
 # executor = ThreadPoolExecutor(max_workers=2)
-# future = executor.submit(FfmpegHelper2.get_thumb, video_path, image_path, "00:01:10")
+# future = executor.submit(FfmpegHelper.get_thumb, video_path, image_path, "00:01:10")
 # # future.result(timeout=60) 或者定期查询 future.done()

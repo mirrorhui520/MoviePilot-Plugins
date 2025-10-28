@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.core.event import eventmanager, Event
 from app.log import logger
 from app.plugins import _PluginBase
-from app.plugins.FFmpegThumb2.ffmpeg_helper import FfmpegHelper2
+from app.plugins.FFmpegThumbFree.ffmpeg_helper import FfmpegHelper
 from app.schemas import TransferInfo
 from app.schemas.types import EventType
 from app.utils.system import SystemUtils
@@ -20,7 +20,7 @@ from app.utils.system import SystemUtils
 ffmpeg_lock = threading.Lock()
 
 
-class FFmpegThumb2(_PluginBase):
+class FFmpegThumbFree(_PluginBase):
     # 插件名称
     plugin_name = "FFmpeg缩略图2"
     # 插件描述
@@ -34,7 +34,7 @@ class FFmpegThumb2(_PluginBase):
     # 作者主页
     author_url = "https://github.com/mirrorhui520"
     # 插件配置项ID前缀
-    plugin_config_prefix = "FFmpegThumb2_"
+    plugin_config_prefix = "FFmpegThumbFree_"
     # 加载顺序
     plugin_order = 31
     # 可使用的用户级别
@@ -345,8 +345,8 @@ class FFmpegThumb2(_PluginBase):
                 if thumb_path.exists():
                     logger.info(f"缩略图已存在：{thumb_path}")
                     return
-                if FfmpegHelper2.get_thumb(video_path=str(file_path),
-                                           image_path=str(thumb_path), frames=self._timeline):
+                if FfmpegHelper.get_thumb(video_path=str(file_path),
+                                          image_path=str(thumb_path), frames=self._timeline):
                     logger.info(f"{file_path} 缩略图已生成：{thumb_path}")
             except Exception as err:
                 logger.error(f"FFmpeg处理文件 {file_path} 时发生错误：{str(err)}")
