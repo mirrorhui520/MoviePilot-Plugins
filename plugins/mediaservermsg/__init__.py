@@ -3,6 +3,9 @@ from typing import Any, List, Dict, Tuple
 
 from app.core.event import eventmanager, Event
 from app.log import logger
+from app.modules.emby import Emby
+from app.modules.jellyfin import Jellyfin
+from app.modules.plex import Plex
 from app.plugins import _PluginBase
 from app.schemas import WebhookEventInfo
 from app.schemas.types import EventType, MediaType, MediaImageType, NotificationType
@@ -17,7 +20,7 @@ class MediaServerMsg(_PluginBase):
     # 插件图标
     plugin_icon = "mediaplay.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.3"
     # 插件作者
     plugin_author = "jxxghp"
     # 作者主页
@@ -29,9 +32,15 @@ class MediaServerMsg(_PluginBase):
     # 可使用的用户级别
     auth_level = 1
 
+    # 对像
+    plex = None
+    emby = None
+    jellyfin = None
+
     # 私有属性
     _enabled = False
     _types = []
+    _webhook_msg_keys = {}
 
     # 拼装消息内容
     _webhook_actions = {
@@ -57,6 +66,10 @@ class MediaServerMsg(_PluginBase):
         if config:
             self._enabled = config.get("enabled")
             self._types = config.get("types") or []
+            if self._enabled:
+                self.emby = Emby()
+                self.plex = Plex()
+                self.jellyfin = Jellyfin()
 
     def get_state(self) -> bool:
         return self._enabled
@@ -186,6 +199,13 @@ class MediaServerMsg(_PluginBase):
             logger.info(f"未开启 {event_info.event} 类型的消息通知")
             return
 
+        expiring_key = f"{event_info.item_id}-{event_info.client}-{event_info.user_name}"
+        # 过滤停止播放重复消息
+        if str(event_info.event) == "playback.stop" and expiring_key in self._webhook_msg_keys.keys():
+            # 刷新过期时间
+            self.__add_element(expiring_key)
+            return
+
         # 消息标题
         if event_info.item_type in ["TV", "SHOW"]:
             message_title = f"{self._webhook_actions.get(event_info.event)}剧集 {event_info.item_name}"
@@ -233,9 +253,40 @@ class MediaServerMsg(_PluginBase):
         if not image_url:
             image_url = self._webhook_images.get(event_info.channel)
 
+        # 获取链接地址
+        if event_info.channel == "emby":
+            play_link = self.emby.get_play_url(event_info.item_id)
+        elif event_info.channel == "plex":
+            play_link = self.plex.get_play_url(event_info.item_id)
+        elif event_info.channel == "jellyfin":
+            play_link = self.jellyfin.get_play_url(event_info.item_id)
+        else:
+            play_link = None
+
+        if str(event_info.event) == "playback.stop":
+            # 停止播放消息，添加到过期字典
+            self.__add_element(expiring_key)
+        if str(event_info.event) == "playback.start":
+            # 开始播放消息，删除过期字典
+            self.__remove_element(expiring_key)
+
         # 发送消息
         self.post_message(mtype=NotificationType.MediaServer,
-                          title=message_title, text=message_content, image=image_url)
+                          title=message_title, text=message_content, image=image_url, link=play_link)
+
+    def __add_element(self, key, duration=600):
+        expiration_time = time.time() + duration
+        # 如果元素已经存在，更新其过期时间
+        self._webhook_msg_keys[key] = expiration_time
+
+    def __remove_element(self, key):
+        self._webhook_msg_keys = {k: v for k, v in self._webhook_msg_keys.items() if k != key}
+
+    def __get_elements(self):
+        current_time = time.time()
+        # 过滤掉过期的元素
+        self._webhook_msg_keys = {k: v for k, v in self._webhook_msg_keys.items() if v > current_time}
+        return list(self._webhook_msg_keys.keys())
 
     def stop_service(self):
         """

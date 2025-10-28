@@ -1,7 +1,5 @@
 from typing import Tuple
 
-from ruamel.yaml import CommentedMap
-
 from app.log import logger
 from app.plugins.autosignin.sites import _ISiteSigninHandler
 from app.utils.string import StringUtils
@@ -26,7 +24,7 @@ class HaiDan(_ISiteSigninHandler):
         """
         return True if StringUtils.url_equal(url, cls.site_url) else False
 
-    def signin(self, site_info: CommentedMap) -> Tuple[bool, str]:
+    def signin(self, site_info: dict) -> Tuple[bool, str]:
         """
         执行签到操作
         :param site_info: 站点信息，含有站点Url、站点Cookie、UA等信息
@@ -39,7 +37,15 @@ class HaiDan(_ISiteSigninHandler):
         render = site_info.get("render")
 
         # 签到
-        html_text = self.get_page_source(url='https://www.haidan.video/signin.php',
+        # 签到页会重定向到index.php，由于302重定向特性，导致index.php没有携带cookie
+        self.get_page_source(url='https://www.haidan.video/signin.php',
+                                         cookie=site_cookie,
+                                         ua=ua,
+                                         proxy=proxy,
+                                         render=render)
+
+        # 重新携带cookie获取index.php查看签到结果
+        html_text = self.get_page_source(url='https://www.haidan.video/index.php',
                                          cookie=site_cookie,
                                          ua=ua,
                                          proxy=proxy,

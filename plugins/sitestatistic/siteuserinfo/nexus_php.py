@@ -61,6 +61,9 @@ class NexusPhpSiteUserInfo(ISiteUserInfo):
                 self.message_unread = StringUtils.str_int(message_text)
 
     def _parse_user_base_info(self, html_text: str):
+        """
+        解析用户基本信息
+        """
         # 合并解析，减少额外请求调用
         self._parse_user_traffic_info(html_text)
         self._user_traffic_page = None
@@ -85,6 +88,9 @@ class NexusPhpSiteUserInfo(ISiteUserInfo):
             return
 
     def _parse_user_traffic_info(self, html_text):
+        """
+        解析用户流量信息
+        """
         html_text = self._prepare_html_text(html_text)
         upload_match = re.search(r"[^总]上[传傳]量?[:：_<>/a-zA-Z-=\"'\s#;]+([\d,.\s]+[KMGTPI]*B)", html_text,
                                  re.IGNORECASE)
@@ -112,7 +118,7 @@ class NexusPhpSiteUserInfo(ISiteUserInfo):
             if bonus_match and bonus_match.group(1).strip():
                 self.bonus = StringUtils.str_float(bonus_match.group(1))
                 return
-        bonus_match = re.search(r"mybonus.[\[\]:：<>/a-zA-Z_\-=\"'\s#;.(使用魔力值豆]+\s*([\d,.]+)[<()&\s]", html_text)
+        bonus_match = re.search(r"mybonus.[\[\]:：<>/a-zA-Z_\-=\"'\s#;.(使用&说明魔力值豆]+\s*([\d,.]+)[\[<()&\s]", html_text)
         try:
             if bonus_match and bonus_match.group(1).strip():
                 self.bonus = StringUtils.str_float(bonus_match.group(1))
@@ -211,7 +217,7 @@ class NexusPhpSiteUserInfo(ISiteUserInfo):
 
         # 是否存在下页数据
         next_page = None
-        next_page_text = html.xpath('//a[contains(.//text(), "下一页") or contains(.//text(), "下一頁")]/@href')
+        next_page_text = html.xpath('//a[contains(.//text(), "下一页") or contains(.//text(), "下一頁") or contains(.//text(), ">")]/@href')
         if next_page_text:
             next_page = next_page_text[-1].strip()
             # fix up page url
@@ -332,6 +338,12 @@ class NexusPhpSiteUserInfo(ISiteUserInfo):
                                       'following-sibling::td[1]')
         if user_levels_text:
             self.user_level = user_levels_text[0].xpath("string(.)").strip()
+            return
+
+        # 适配PTT用户等级
+        user_levels_text = html.xpath('//tr/td[text()="用户等级"]/following-sibling::td[1]/b/@title')
+        if user_levels_text:
+            self.user_level = user_levels_text[0].strip()
             return
 
         user_levels_text = html.xpath('//a[contains(@href, "userdetails")]/text()')

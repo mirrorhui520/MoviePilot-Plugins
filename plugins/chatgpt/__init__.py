@@ -16,7 +16,7 @@ class ChatGPT(_PluginBase):
     # 插件图标
     plugin_icon = "Chatgpt_A.png"
     # 插件版本
-    plugin_version = "1.2"
+    plugin_version = "1.3.1"
     # 插件作者
     plugin_author = "jxxghp"
     # 作者主页
@@ -32,6 +32,7 @@ class ChatGPT(_PluginBase):
     openai = None
     _enabled = False
     _proxy = False
+    _compatible = False
     _recognize = False
     _openai_url = None
     _openai_key = None
@@ -41,6 +42,7 @@ class ChatGPT(_PluginBase):
         if config:
             self._enabled = config.get("enabled")
             self._proxy = config.get("proxy")
+            self._compatible = config.get("compatible")
             self._recognize = config.get("recognize")
             self._openai_url = config.get("openai_url")
             self._openai_key = config.get("openai_key")
@@ -48,7 +50,7 @@ class ChatGPT(_PluginBase):
             if self._openai_url and self._openai_key:
                 self.openai = OpenAi(api_key=self._openai_key, api_url=self._openai_url,
                                      proxy=settings.PROXY if self._proxy else None,
-                                     model=self._model)
+                                     model=self._model, compatible=bool(self._compatible))
 
     def get_state(self) -> bool:
         return self._enabled
@@ -99,6 +101,22 @@ class ChatGPT(_PluginBase):
                                         'props': {
                                             'model': 'proxy',
                                             'label': '使用代理服务器',
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSwitch',
+                                        'props': {
+                                            'model': 'compatible',
+                                            'label': '兼容模式',
                                         }
                                     }
                                 ]
@@ -176,11 +194,34 @@ class ChatGPT(_PluginBase):
                             }
                         ]
                     },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VAlert',
+                                        'props': {
+                                            'type': 'info',
+                                            'variant': 'tonal',
+                                            'text': '开启插件后，消息交互时使用请[问帮你]开头，或者以？号结尾，或者超过10个汉字/单词，则会触发ChatGPT回复。'
+                                                    '开启辅助识别后，内置识别功能无法正常识别种子/文件名称时，将使用ChatGTP进行AI辅助识别，可以提升动漫等非规范命名的识别成功率。'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
                 ]
             }
         ], {
             "enabled": False,
             "proxy": False,
+            "compatible": False,
             "recognize": False,
             "openai_url": "https://api.openai.com",
             "openai_key": "",

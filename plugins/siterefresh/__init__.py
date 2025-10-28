@@ -17,7 +17,7 @@ class SiteRefresh(_PluginBase):
     # 插件图标
     plugin_icon = "Chrome_A.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "thsrite"
     # 作者主页
@@ -29,9 +29,6 @@ class SiteRefresh(_PluginBase):
     # 可使用的用户级别
     auth_level = 2
 
-    # 私有属性
-    siteoper: SiteOper = None
-
     # 配置属性
     _enabled: bool = False
     _notify: bool = False
@@ -42,7 +39,7 @@ class SiteRefresh(_PluginBase):
     _siteconf: list = []
 
     def init_plugin(self, config: dict = None):
-        self.siteoper = SiteOper()
+
         # 配置
         if config:
             self._enabled = config.get("enabled")
@@ -70,25 +67,24 @@ class SiteRefresh(_PluginBase):
             logger.error(f"未获取到site_id")
             return
 
-        site = self.siteoper.get(site_id)
+        site = SiteOper().get(site_id)
         if not site:
             logger.error(f"未获取到site_id {site_id} 对应的站点数据")
             return
 
         site_name = site.name
         logger.info(f"开始尝试登录站点 {site_name}")
-        siteurl, siteuser, sitepwd = None, None, None
+        siteurl, siteuser, sitepwd, sitecode = None, None, None, None
         # 判断site是否已配置用户名密码
         for site_conf in self._siteconf:
             if not site_conf:
                 continue
             site_confs = str(site_conf).split("|")
-            if len(site_confs) == 3:
-                siteurl = site_confs[0]
-                siteuser = site_confs[1]
-                sitepwd = site_confs[2]
-            else:
-                logger.error(f"{site_conf}配置有误，已跳过")
+            try:
+                siteurl, siteuser, sitepwd, *sitecode = site_confs
+                sitecode = str(sitecode[0]) if sitecode else ""
+            except Exception as e:
+                logger.error(f"{site_conf}配置有误:{e}，已跳过")
                 continue
 
             # 判断是否是目标域名
@@ -100,7 +96,8 @@ class SiteRefresh(_PluginBase):
         if siteurl and siteuser and sitepwd:
             state, messages = SiteChain().update_cookie(site_info=site,
                                                         username=siteuser,
-                                                        password=sitepwd)
+                                                        password=sitepwd,
+                                                        two_step_code=sitecode)
             if state:
                 logger.info(f"站点{site_name}自动更新Cookie和Ua成功")
             else:
@@ -181,7 +178,7 @@ class SiteRefresh(_PluginBase):
                                             'label': '站点配置',
                                             'rows': 5,
                                             'placeholder': '每一行一个站点，配置方式：\n'
-                                                           '域名domain|用户名|用户密码\n'
+                                                           '域名domain|用户名|用户密码(|二次验证秘钥)\n'
                                         }
                                     }
                                 ]

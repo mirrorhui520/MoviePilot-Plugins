@@ -2,8 +2,6 @@ import json
 import time
 from typing import Tuple
 
-from ruamel.yaml import CommentedMap
-
 from app.core.config import settings
 from app.helper.ocr import OcrHelper
 from app.log import logger
@@ -31,7 +29,7 @@ class HDSky(_ISiteSigninHandler):
         """
         return True if StringUtils.url_equal(url, cls.site_url) else False
 
-    def signin(self, site_info: CommentedMap) -> Tuple[bool, str]:
+    def signin(self, site_info: dict) -> Tuple[bool, str]:
         """
         执行签到操作
         :param site_info: 站点信息，含有站点Url、站点Cookie、UA等信息
@@ -42,6 +40,7 @@ class HDSky(_ISiteSigninHandler):
         ua = site_info.get("ua")
         proxy = site_info.get("proxy")
         render = site_info.get("render")
+        referer = site_info.get("url")
 
         # 判断今日是否已签到
         html_text = self.get_page_source(url='https://hdsky.me',
@@ -69,6 +68,9 @@ class HDSky(_ISiteSigninHandler):
         while not img_hash and res_times <= 3:
             image_res = RequestUtils(cookies=site_cookie,
                                      ua=ua,
+                                     content_type='application/x-www-form-urlencoded; charset=UTF-8',
+                                     referer="https://hdsky.me/index.php",
+                                     accept_type="*/*",
                                      proxies=settings.PROXY if proxy else None
                                      ).post_res(url='https://hdsky.me/image_code_ajax.php',
                                                 data={'action': 'new'})
@@ -78,14 +80,14 @@ class HDSky(_ISiteSigninHandler):
                     img_hash = image_json["code"]
                     break
                 res_times += 1
-                logger.debug(f"获取{site}验证码失败，正在进行重试，目前重试次数 {res_times}")
+                logger.info(f"获取 {site} 验证码失败，正在进行重试，目前重试次数：{res_times}")
                 time.sleep(1)
 
         # 获取到二维码hash
         if img_hash:
             # 完整验证码url
             img_get_url = 'https://hdsky.me/image.php?action=regimage&imagehash=%s' % img_hash
-            logger.debug(f"获取到{site}验证码链接 {img_get_url}")
+            logger.info(f"获取到 {site} 验证码链接：{img_get_url}")
             # ocr识别多次，获取6位验证码
             times = 0
             ocr_result = None
@@ -95,13 +97,13 @@ class HDSky(_ISiteSigninHandler):
                 ocr_result = OcrHelper().get_captcha_text(image_url=img_get_url,
                                                           cookie=site_cookie,
                                                           ua=ua)
-                logger.debug(f"ocr识别{site}验证码 {ocr_result}")
+                logger.info(f"OCR识别 {site} 验证码：{ocr_result}")
                 if ocr_result:
                     if len(ocr_result) == 6:
-                        logger.info(f"ocr识别{site}验证码成功 {ocr_result}")
+                        logger.info(f"OCR识别 {site} 验证码成功：{ocr_result}")
                         break
                 times += 1
-                logger.debug(f"ocr识别{site}验证码失败，正在进行重试，目前重试次数 {times}")
+                logger.info(f"OCR识别 {site} 验证码失败，正在进行重试，目前重试次数：{times}")
                 time.sleep(1)
 
             if ocr_result:
@@ -114,6 +116,7 @@ class HDSky(_ISiteSigninHandler):
                 # 访问签到链接
                 res = RequestUtils(cookies=site_cookie,
                                    ua=ua,
+                                   referer=referer,
                                    proxies=settings.PROXY if proxy else None
                                    ).post_res(url='https://hdsky.me/showup.php', data=data)
                 if res and res.status_code == 200:

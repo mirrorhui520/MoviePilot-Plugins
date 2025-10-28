@@ -25,7 +25,7 @@ class AutoBackup(_PluginBase):
     # 插件图标
     plugin_icon = "Time_machine_B.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.3"
     # 插件作者
     plugin_author = "thsrite"
     # 作者主页
@@ -60,37 +60,34 @@ class AutoBackup(_PluginBase):
             self._onlyonce = config.get("onlyonce")
 
             # 加载模块
-        if self._enabled:
-            # 定时服务
+        if self._onlyonce:
             self._scheduler = BackgroundScheduler(timezone=settings.TZ)
-
-            if self._cron:
-                try:
-                    self._scheduler.add_job(func=self.__backup,
-                                            trigger=CronTrigger.from_crontab(self._cron),
-                                            name="自动备份")
-                except Exception as err:
-                    logger.error(f"定时任务配置错误：{str(err)}")
-
-            if self._onlyonce:
-                logger.info(f"自动备份服务启动，立即运行一次")
-                self._scheduler.add_job(func=self.__backup, trigger='date',
-                                        run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
-                                        name="自动备份")
-                # 关闭一次性开关
-                self._onlyonce = False
-                self.update_config({
-                    "onlyonce": False,
-                    "cron": self._cron,
-                    "enabled": self._enabled,
-                    "cnt": self._cnt,
-                    "notify": self._notify,
-                })
+            logger.info(f"自动备份服务启动，立即运行一次")
+            self._scheduler.add_job(func=self.__backup, trigger='date',
+                                    run_date=datetime.now(tz=pytz.timezone(settings.TZ)) + timedelta(seconds=3),
+                                    name="自动备份")
+            # 关闭一次性开关
+            self._onlyonce = False
+            self.update_config({
+                "onlyonce": False,
+                "cron": self._cron,
+                "enabled": self._enabled,
+                "cnt": self._cnt,
+                "notify": self._notify,
+            })
 
             # 启动任务
             if self._scheduler.get_jobs():
                 self._scheduler.print_jobs()
                 self._scheduler.start()
+
+    def api_backup(self, apikey: str):
+        """
+        API调用备份
+        """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API密钥错误")
+        return self.__backup()
 
     def __backup(self):
         """
@@ -156,10 +153,14 @@ class AutoBackup(_PluginBase):
             backup_file = f"bk_{time.strftime('%Y%m%d%H%M%S')}"
             backup_path = bk_path / backup_file
             backup_path.mkdir(parents=True)
+
             # 把现有的相关文件进行copy备份
-            if settings.LIBRARY_CATEGORY:
-                shutil.copy(f'{config_path}/category.yaml', backup_path)
-            shutil.copy(f'{config_path}/user.db', backup_path)
+            category_file = config_path / "category.yaml"
+            if category_file.exists():
+                shutil.copy(category_file, backup_path)
+            userdb_file = config_path / "user.db"
+            if userdb_file.exists():
+                shutil.copy(userdb_file, backup_path)
 
             zip_file = str(backup_path) + '.zip'
             if os.path.exists(zip_file):
@@ -180,11 +181,31 @@ class AutoBackup(_PluginBase):
     def get_api(self) -> List[Dict[str, Any]]:
         return [{
             "path": "/backup",
-            "endpoint": self.__backup,
+            "endpoint": self.api_backup,
             "methods": ["GET"],
             "summary": "MoviePilot备份",
             "description": "MoviePilot备份",
         }]
+
+    def get_service(self) -> List[Dict[str, Any]]:
+        """
+        注册插件公共服务
+        [{
+            "id": "服务ID",
+            "name": "服务名称",
+            "trigger": "触发器：cron/interval/date/CronTrigger.from_crontab()",
+            "func": self.xxx,
+            "kwargs": {} # 定时器参数
+        }]
+        """
+        if self._enabled and self._cron:
+            return [{
+                "id": "AutoBackup",
+                "name": "自动备份定时服务",
+                "trigger": CronTrigger.from_crontab(self._cron),
+                "func": self.__backup,
+                "kwargs": {}
+            }]
 
     def backup(self) -> schemas.Response:
         """
