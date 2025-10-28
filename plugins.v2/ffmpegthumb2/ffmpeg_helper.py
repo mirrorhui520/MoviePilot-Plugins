@@ -1,17 +1,9 @@
 import json
 import subprocess
 import shutil
-import os
 from typing import Optional
 
-class SystemUtils:
-    @staticmethod
-    def execute(cmd):
-        try:
-            ret = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return ret.returncode == 0
-        except Exception:
-            return False
+from app.utils.system import SystemUtils
 
 
 def _time_str_to_seconds(time_str: str) -> Optional[float]:
@@ -36,16 +28,6 @@ class FfmpegHelper:
     DEFAULT_PRESEEK_OFFSET = 2.0
     # 子进程超时时间（秒），避免长时间挂起
     DEFAULT_TIMEOUT = 30
-
-    # 全局优化开关：优先从环境变量读取（"1" 开启, "0" 关闭），默认开启
-    ENV_FLAG_NAME = "FFMPEG_OPTIMIZATIONS"
-    DEFAULT_ENV_FLAG = "1"
-
-    @staticmethod
-    def _env_opt_enabled() -> bool:
-        val = os.getenv(FfmpegHelper.ENV_FLAG_NAME,
-                        FfmpegHelper.DEFAULT_ENV_FLAG)
-        return val != "0"
 
     @staticmethod
     def _which(exe_name: str) -> Optional[str]:
@@ -79,39 +61,24 @@ class FfmpegHelper:
     @staticmethod
     def get_thumb(video_path: str, image_path: str, frames: str = None,
                   threads: int = DEFAULT_THREADS, preseek_offset: float = DEFAULT_PRESEEK_OFFSET,
-                  timeout: int = DEFAULT_TIMEOUT, enable_optimizations: Optional[bool] = None):
+                  timeout: int = DEFAULT_TIMEOUT):
         """
-        使用 ffmpeg 截图
-        - 如果 enable_optimizations 为 True：使用 two-stage seek（先快速 seek 到 t-preseek_offset，再小范围精确 seek）
-        - 如果为 False：使用原始行为（-ss 在 -i 之后的精确 seek，兼容旧逻辑）
-        - enable_optimizations 参数优先于环境变量 FFMPEG_OPTIMIZATIONS
+        使用 ffmpeg 截图（two-stage seek）
+        - 为兼顾效率与精度：先快速 seek 到 (t - preseek_offset)（keyframe），再在输入后精确 seek preseek_offset 秒
+        - 若 frames 解析失败或 preseek_offset=0 则使用精确 seek（-ss 在 -i 之后）
         """
         if not frames:
             frames = "00:03:01"
         if not video_path or not image_path:
             return False
 
-        # 决定是否启用优化
-        if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper._env_opt_enabled()
-
         # 检查 ffmpeg 是否存在
         if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
-        if not enable_optimizations:
-            # 保持原始行为（字符串命令、使用 SystemUtils.execute），尽量不更改调用方式
-            cmd = 'ffmpeg -i "{video_path}" -ss {frames} -vframes 1 -f image2 "{image_path}"'.format(
-                video_path=video_path, frames=frames, image_path=image_path
-            )
-            # 原代码使用 SystemUtils.execute，这里沿用以保持兼容
-            result = SystemUtils.execute(cmd)
-            return bool(result)
-
-        # ---- 优化路径 ----
         secs = _time_str_to_seconds(frames)
-        # 如果无法解析时间字符串，则直接用精确 seek（-ss 在 -i 之后）
+        # 如果无法解析时间字符串，则直接用原来的精确 seek（慢）
         if secs is None:
             # 精确 seek（准确但慢）
             command = [
@@ -143,6 +110,7 @@ class FfmpegHelper:
             return FfmpegHelper._run_cmd(command, timeout=timeout)
 
         # two-stage: fast seek then accurate small seek
+        # 注意参数顺序：-ss 前置在 -i 之前；第二个 -ss 在输入之后。
         command = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
             "-ss", str(preseek_secs),
@@ -170,11 +138,10 @@ class FfmpegHelper:
 
     @staticmethod
     def extract_wav(video_path: str, audio_path: str, audio_index: str = None,
-                    threads: int = DEFAULT_THREADS, timeout: int = DEFAULT_TIMEOUT,
-                    enable_optimizations: Optional[bool] = None):
+                    threads: int = DEFAULT_THREADS, timeout: int = DEFAULT_TIMEOUT):
         """
         从视频文件中提取 16000Hz, 16-bit 单声道 wav
-        - enable_optimizations 控制是否使用 -vn（避免处理视频轨）等优化
+        - 加入 -vn 禁止视频处理，限制线程，设置超时
         """
         if not video_path or not audio_path:
             return False
@@ -182,22 +149,6 @@ class FfmpegHelper:
             print("ffmpeg not found in PATH")
             return False
 
-        if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper._env_opt_enabled()
-
-        if not enable_optimizations:
-            # 原始行为（尽量保持原来参数）
-            if audio_index:
-                command = ['ffmpeg', "-hide_banner", "-loglevel", "warning", '-y', '-i', video_path,
-                           '-map', f'0:a:{audio_index}',
-                           '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', audio_path]
-            else:
-                command = ['ffmpeg', "-hide_banner", "-loglevel", "warning", '-y', '-i', video_path,
-                           '-acodec', 'pcm_s16le', '-ac', '1', '-ar', '16000', audio_path]
-            ret = subprocess.run(command).returncode
-            return ret == 0
-
-        # 优化路径：添加 -vn、限制线程并使用超时
         base = ["ffmpeg", "-hide_banner", "-loglevel",
                 "error", "-nostdin", "-y", "-i", video_path, "-vn"]
         if audio_index is not None:
@@ -232,12 +183,9 @@ class FfmpegHelper:
 
     @staticmethod
     def extract_subtitle(video_path: str, subtitle_path: str, subtitle_index: str = None,
-                         threads: int = DEFAULT_THREADS, timeout: int = DEFAULT_TIMEOUT,
-                         enable_optimizations: Optional[bool] = None):
+                         threads: int = DEFAULT_THREADS, timeout: int = DEFAULT_TIMEOUT):
         """
-        从视频中提取字幕。
-        - enable_optimizations=True 时优先使用 -c:s copy 避免重新编码（更快）。
-        - enable_optimizations=False 时尽量保持原始行为（不强制 -c:s copy）。
+        从视频中提取字幕。优先使用 -c:s copy 避免重新编码（更快）。
         """
         if not video_path or not subtitle_path:
             return False
@@ -245,21 +193,6 @@ class FfmpegHelper:
             print("ffmpeg not found in PATH")
             return False
 
-        if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper._env_opt_enabled()
-
-        if not enable_optimizations:
-            if subtitle_index:
-                command = ['ffmpeg', "-hide_banner", "-loglevel", "warning", '-y', '-i', video_path,
-                           '-map', f'0:s:{subtitle_index}',
-                           subtitle_path]
-            else:
-                command = ['ffmpeg', "-hide_banner", "-loglevel",
-                           "warning", '-y', '-i', video_path, subtitle_path]
-            ret = subprocess.run(command).returncode
-            return ret == 0
-
-        # 优化路径
         if subtitle_index is not None:
             command = [
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
@@ -270,6 +203,7 @@ class FfmpegHelper:
                 subtitle_path
             ]
         else:
+            # 如果用户没有指定字幕流，直接尝试导出第一个字幕流（可能需要 ffmpeg 自动选择）
             command = [
                 "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
                 "-i", video_path,
@@ -279,11 +213,12 @@ class FfmpegHelper:
             ]
         return FfmpegHelper._run_cmd(command, timeout=timeout)
 
-
-# 使用说明（要点）
-# - 用环境变量控制（优先级低于方法参数）:
-#     export FFMPEG_OPTIMIZATIONS=1   # 启用优化（默认）
-#     export FFMPEG_OPTIMIZATIONS=0   # 禁用优化（恢复原始行为）
-# - 或在调用时传入 enable_optimizations=False/True 覆盖环境变量，例如:
-#     FfmpegHelper.get_thumb(path_video, path_image, enable_optimizations=False)
-# - 建议把耗时的提取工作放到后台线程池或任务队列（ThreadPoolExecutor / Celery / RQ）以避免阻塞主线程.
+# 使用建议：
+# - 在 web 服务中不要直接在请求线程里同步调用这些方法（尤其是耗时的音频/字幕操作）。
+# - 建议用 ThreadPoolExecutor.submit(...) 或推到专门队列（Celery / RQ），只把结果写回数据库或通知前端。
+#
+# 示例（简单）:
+# from concurrent.futures import ThreadPoolExecutor
+# executor = ThreadPoolExecutor(max_workers=2)
+# future = executor.submit(FfmpegHelper.get_thumb, video_path, image_path, "00:01:10")
+# # future.result(timeout=60) 或者定期查询 future.done()
