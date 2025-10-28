@@ -4,7 +4,14 @@ import shutil
 import os
 from typing import Optional
 
-from app.utils.system import SystemUtils
+class SystemUtils:
+    @staticmethod
+    def execute(cmd):
+        try:
+            ret = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return ret.returncode == 0
+        except Exception:
+            return False
 
 
 def _time_str_to_seconds(time_str: str) -> Optional[float]:
@@ -22,7 +29,7 @@ def _time_str_to_seconds(time_str: str) -> Optional[float]:
         return None
 
 
-class FfmpegHelper2:
+class FfmpegHelper:
     # 默认限制 ffmpeg 使用的线程数（根据机器调整）
     DEFAULT_THREADS = 1
     # 在目标时间前预seek多少秒（two-stage seek），用来减少解码量同时保留精度
@@ -36,8 +43,8 @@ class FfmpegHelper2:
 
     @staticmethod
     def _env_opt_enabled() -> bool:
-        val = os.getenv(FfmpegHelper2.ENV_FLAG_NAME,
-                        FfmpegHelper2.DEFAULT_ENV_FLAG)
+        val = os.getenv(FfmpegHelper.ENV_FLAG_NAME,
+                        FfmpegHelper.DEFAULT_ENV_FLAG)
         return val != "0"
 
     @staticmethod
@@ -86,10 +93,10 @@ class FfmpegHelper2:
 
         # 决定是否启用优化
         if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper2._env_opt_enabled()
+            enable_optimizations = FfmpegHelper._env_opt_enabled()
 
         # 检查 ffmpeg 是否存在
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
@@ -116,7 +123,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(command, timeout=timeout)
+            return FfmpegHelper._run_cmd(command, timeout=timeout)
 
         # two-stage seek: preseek 到 max(0, secs - preseek_offset)，然后在输入后做 delta 精确 seek
         preseek_secs = max(0.0, secs - float(preseek_offset))
@@ -133,7 +140,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(command, timeout=timeout)
+            return FfmpegHelper._run_cmd(command, timeout=timeout)
 
         # two-stage: fast seek then accurate small seek
         command = [
@@ -146,7 +153,7 @@ class FfmpegHelper2:
             "-threads", str(threads),
             image_path
         ]
-        ok = FfmpegHelper2._run_cmd(command, timeout=timeout)
+        ok = FfmpegHelper._run_cmd(command, timeout=timeout)
         # 若 two-stage 失败，可以回退到精确 seek（更慢但更可能成功）
         if not ok:
             fallback = [
@@ -158,7 +165,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 image_path
             ]
-            return FfmpegHelper2._run_cmd(fallback, timeout=timeout)
+            return FfmpegHelper._run_cmd(fallback, timeout=timeout)
         return True
 
     @staticmethod
@@ -171,12 +178,12 @@ class FfmpegHelper2:
         """
         if not video_path or not audio_path:
             return False
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
         if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper2._env_opt_enabled()
+            enable_optimizations = FfmpegHelper._env_opt_enabled()
 
         if not enable_optimizations:
             # 原始行为（尽量保持原来参数）
@@ -198,7 +205,7 @@ class FfmpegHelper2:
 
         base += ["-acodec", "pcm_s16le", "-ac", "1", "-ar",
                  "16000", "-threads", str(threads), audio_path]
-        return FfmpegHelper2._run_cmd(base, timeout=timeout)
+        return FfmpegHelper._run_cmd(base, timeout=timeout)
 
     @staticmethod
     def get_metadata(video_path: str, timeout: int = DEFAULT_TIMEOUT):
@@ -207,7 +214,7 @@ class FfmpegHelper2:
         """
         if not video_path:
             return None
-        if not FfmpegHelper2._which("ffprobe"):
+        if not FfmpegHelper._which("ffprobe"):
             print("ffprobe not found in PATH")
             return None
         try:
@@ -234,12 +241,12 @@ class FfmpegHelper2:
         """
         if not video_path or not subtitle_path:
             return False
-        if not FfmpegHelper2._which("ffmpeg"):
+        if not FfmpegHelper._which("ffmpeg"):
             print("ffmpeg not found in PATH")
             return False
 
         if enable_optimizations is None:
-            enable_optimizations = FfmpegHelper2._env_opt_enabled()
+            enable_optimizations = FfmpegHelper._env_opt_enabled()
 
         if not enable_optimizations:
             if subtitle_index:
@@ -270,7 +277,7 @@ class FfmpegHelper2:
                 "-threads", str(threads),
                 subtitle_path
             ]
-        return FfmpegHelper2._run_cmd(command, timeout=timeout)
+        return FfmpegHelper._run_cmd(command, timeout=timeout)
 
 
 # 使用说明（要点）
@@ -278,5 +285,5 @@ class FfmpegHelper2:
 #     export FFMPEG_OPTIMIZATIONS=1   # 启用优化（默认）
 #     export FFMPEG_OPTIMIZATIONS=0   # 禁用优化（恢复原始行为）
 # - 或在调用时传入 enable_optimizations=False/True 覆盖环境变量，例如:
-#     FfmpegHelper2.get_thumb(path_video, path_image, enable_optimizations=False)
+#     FfmpegHelper.get_thumb(path_video, path_image, enable_optimizations=False)
 # - 建议把耗时的提取工作放到后台线程池或任务队列（ThreadPoolExecutor / Celery / RQ）以避免阻塞主线程.
