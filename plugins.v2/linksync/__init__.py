@@ -48,6 +48,12 @@ DELETE_MODES: Dict[str, str] = {
 # 记录键的分隔符（避免路径包含该字符）
 RECORD_SEP = "\x00"
 
+# 详情页 UI 状态存储键（当前选中的监控目录 / 专辑目录）
+UI_STATE_KEY = "linksync_ui_state"
+
+# 根目录下直接转移文件的特殊标识（无专辑目录包裹）
+ROOT_MARK = "_ROOT_"
+
 
 def _has_suffix_in(file_path: Path, extensions: List[str]) -> bool:
     """
@@ -701,6 +707,14 @@ class LinkSync(_PluginBase):
         except Exception as e:
             return False, str(e)
 
+    def __get_ui(self) -> dict:
+        """读取详情页当前选中状态（mon=监控目录 / dir=专辑目录或根标记）"""
+        return dict(self.get_data(UI_STATE_KEY) or {})
+
+    def __save_ui(self, ui: dict):
+        """写回详情页当前选中状态"""
+        self.save_data(UI_STATE_KEY, ui)
+
     def __reset_notify(self):
         """
         重置转移结果统计
@@ -808,6 +822,13 @@ class LinkSync(_PluginBase):
                 "methods": ["GET"],
                 "summary": "刷新列表",
                 "description": "仅用于详情页触发页面重绘以重新加载转移记录列表",
+            },
+            {
+                "path": "/select_dir",
+                "endpoint": self.select_dir,
+                "methods": ["GET"],
+                "summary": "切换查看目录",
+                "description": "记录当前选中的监控目录与专辑目录，触发详情页重绘按目录过滤文件记录列表",
             },
         ]
 
@@ -941,6 +962,21 @@ class LinkSync(_PluginBase):
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         return schemas.Response(success=True, message="已刷新")
+
+    def select_dir(self, apikey: str, mon_path: str = "", rel: str = "") -> schemas.Response:
+        """
+        详情页切换查看的目录：记录当前选中的监控目录与专辑目录，
+        触发前端重绘 get_page 以按所选专辑过滤文件记录列表。
+        :param mon_path: 当前监控目录
+        :param rel: 选中的专辑目录名，"_ROOT_" 表示查看目标目录根下文件
+        """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API密钥错误")
+        ui = self.__get_ui()
+        ui["mon"] = mon_path or ""
+        ui["dir"] = rel or ""
+        self.__save_ui(ui)
+        return schemas.Response(success=True, message="已切换查看目录")
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         return [
@@ -1318,9 +1354,73 @@ class LinkSync(_PluginBase):
             "content": content,
         }
 
-    def _file_row(self, node: dict, mon_path: str, indent: int) -> dict:
-        """单条文件记录行：图标 + 文件名 + 时间/方式 + 三种删除模式按钮"""
-        rec = node.get("rec") or {}
+    @staticmethod
+    def _top_dirs(rels: Dict[str, dict]):
+        """由转移记录聚合出目标目录下的一级专辑目录及根文件
+
+        返回 (tops, roots)：
+        - tops: 有序 dict，一级目录名 -> 该目录下全部文件相对路径列表
+        - roots: 直接位于目标目录根下的文件相对路径列表
+        仅依据已有转移记录重建，无需读取磁盘。
+        """
+        tops: Dict[str, list] = {}
+        roots: list = []
+        for rel in rels:
+            parts = [p for p in rel.split("/") if p]
+            if len(parts) == 1:
+                roots.append(rel)
+            else:
+                tops.setdefault(parts[0], []).append(rel)
+        return tops, roots
+
+    def _album_row(self, name: str, rels: List[str], cur: str,
+                   mon_path: str) -> dict:
+        """一级专辑目录行：点目录名切换下方文件列表 + 三种删除模式按钮"""
+        selected = (name == cur)
+        return self._page_row([
+            {"component": "VBtn",
+             "props": {
+                 "size": "x-small",
+                 "variant": "tonal" if selected else "text",
+                 "color": "primary" if selected else "default",
+                 "prepend-icon": "mdi-check" if selected else "mdi-folder",
+             },
+             "text": f"{name}（{len(rels)}）",
+             "events": {"click": {
+                 "api": "plugin/LinkSync/select_dir",
+                 "method": "get",
+                 "params": {"apikey": settings.API_TOKEN,
+                            "mon_path": mon_path, "rel": name},
+             }}},
+            {"component": "div", "props": {"class": "flex-grow-1"}},
+            self._mode_group("plugin/LinkSync/delete",
+                             lambda m: self._del_btn_params(mon_path, name, 1, m),
+                             prefix="删专辑"),
+        ], 0)
+
+    def _root_switch(self, roots: List[str], cur: str, mon_path: str) -> dict:
+        """目标目录根下直接转移文件的切换行（仅查看，不提供删除）"""
+        selected = (cur == ROOT_MARK)
+        return self._page_row([
+            {"component": "VBtn",
+             "props": {
+                 "size": "x-small",
+                 "variant": "tonal" if selected else "text",
+                 "color": "primary" if selected else "default",
+                 "prepend-icon": "mdi-check" if selected else "mdi-format-list-bulleted",
+             },
+             "text": f"根目录下文件（{len(roots)}）",
+             "events": {"click": {
+                 "api": "plugin/LinkSync/select_dir",
+                 "method": "get",
+                 "params": {"apikey": settings.API_TOKEN,
+                            "mon_path": mon_path, "rel": ROOT_MARK},
+             }}},
+            {"component": "div", "props": {"class": "flex-grow-1"}},
+        ], 0)
+
+    def _file_line(self, rel: str, rec: dict, indent: int) -> dict:
+        """纯展示一条文件转移记录（名称 + 时间 + 方式），不提供删除"""
         info = []
         if rec.get("time"):
             info.append({"component": "span",
@@ -1331,131 +1431,25 @@ class LinkSync(_PluginBase):
                          "props": {"size": "x-small", "color": "primary", "variant": "tonal"},
                          "text": rec["mode"]})
         return self._page_row([
-            {"component": "VIcon", "props": {"icon": "mdi-file-outline",
+            {"component": "VIcon", "props": {"icon": "mdi-music-note-plus",
                                              "size": "small", "color": "grey"}},
             {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-1 text-truncate"},
-             "text": node["rel"]},
+             "text": rel},
             *info,
-            self._mode_group("plugin/LinkSync/delete",
-                             lambda m: self._del_btn_params(mon_path, node["rel"], 0, m),
-                             prefix="删除"),
         ], indent)
-
-    def _folder_row(self, node: dict, mon_path: str, indent: int) -> dict:
-        """目录行：图标 + 目录名 + 三种删除模式按钮（递归子级）"""
-        file_count = sum(1 for n in self._walk(node) if not n["is_dir"])
-        return self._page_row([
-            {"component": "VIcon", "props": {"icon": "mdi-folder",
-                                             "size": "small", "color": "warning"}},
-            {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-1 text-truncate"},
-             "text": f'{node["rel"]}（{file_count}）'},
-            self._mode_group("plugin/LinkSync/delete",
-                             lambda m: self._del_btn_params(mon_path, node["rel"], 1, m),
-                             prefix="删目录"),
-        ], indent)
-
-    def _walk(self, node: dict):
-        """迭代目录节点及其所有子孙"""
-        yield node
-        for child in node.get("children") or []:
-            yield from self._walk(child)
-
-    def _render_tree_rows(self, nodes: List[dict], mon_path: str,
-                          indent: int = 0) -> List[dict]:
-        """递归生成文件树行（目录行 + 其子内容，文件行）"""
-        rows = []
-        for node in nodes:
-            if node["is_dir"]:
-                rows.append(self._folder_row(node, mon_path, indent))
-                if node.get("children"):
-                    rows.extend(self._render_tree_rows(
-                        node["children"], mon_path, indent + 1))
-            else:
-                rows.append(self._file_row(node, mon_path, indent))
-        return rows
-
-    @staticmethod
-    def _build_tree(rels: Dict[str, dict]) -> List[dict]:
-        """把 相对路径->记录 字典构造成文件夹/文件树
-
-        返回节点列表，每个节点：{name, rel, is_dir, rec, children}
-        仅依据已有转移记录生成目录结构，无需读取真实文件系统。
-        """
-        root = []
-        for rel, rec in rels.items():
-            parts = [p for p in rel.split("/") if p]
-            level = root
-            cur_prefix = []
-            count = len(parts)
-            node = None
-            for i, part in enumerate(parts):
-                cur_prefix.append(part)
-                prefix = "/".join(cur_prefix)
-                node = next((n for n in level if n["name"] == part), None)
-                if node is None:
-                    node = {
-                        "name": part,
-                        "rel": prefix,
-                        "is_dir": i < count - 1,
-                        "rec": None,
-                        "children": [],
-                    }
-                    level.append(node)
-                level = node["children"]
-            # 最后一个部分即文件节点，绑定记录
-            if node is not None:
-                node["rec"] = rec
-        return root
-
-    def _mon_panel(self, mon_path: str, rels: Dict[str, dict]) -> dict:
-        """一个监控目录为一个可展开面板，含“清空该目标目录”操作"""
-        body = [
-            {
-                "component": "div",
-                "props": {"class": "d-flex align-center ga-2 pa-1 mb-1"},
-                "content": [
-                    {"component": "span",
-                     "props": {"class": "text-caption text-grey-darken-1"},
-                     "text": "清空该目标目录："},
-                    self._mode_group("plugin/LinkSync/clear",
-                                     lambda m: self._clear_btn_params(mon_path, m),
-                                     prefix="清空"),
-                ],
-            },
-        ]
-        tree = self._build_tree(rels)
-        if tree:
-            body.extend(self._render_tree_rows(tree, mon_path))
-        else:
-            body.append(
-                {"component": "div", "props": {"class": "text-grey text-caption"},
-                 "text": "（该监控目录暂无转移记录）"})
-        return {
-            "component": "VExpansionPanel",
-            "content": [
-                {
-                    "component": "VExpansionPanelTitle",
-                    "props": {"class": "text-caption"},
-                    "content": [
-                        {"component": "div", "text": f"{mon_path}（{len(rels)} 个文件）"}
-                    ],
-                },
-                {"component": "VExpansionPanelText", "content": body},
-            ],
-        }
 
     def get_page(self) -> List[dict]:
         """
-        拼装插件详情展示页（管理已转移记录）：
+        拼装插件详情展示页（管理已转移记录，目录版块 + 文件记录列表分离）：
         - 顶部操作区：刷新列表 / 立即全量同步 / 一键清空全部目标目录（三种模式）
-        - 记录按监控目录下级文件夹自动聚合为目录树，可展开查看每个子目录与文件
-        - 每条目录/文件提供三种删除模式按钮，点击即按所选模式执行并自动刷新
-        - 记录存于插件自身数据，独立于日志；
-          列表不会自动轮询更新，删除/同步/全量操作后自动刷新，也可手动点“刷新列表”。
+        - 监控目录切换（存在多个监控目录时）
+        - 目录版块：按目标目录下的一级专辑目录列出转移记录，每个专辑提供三种删除模式，
+          点击某个专辑目录即筛选下方文件记录列表（不会一次性展开全部，避免卡顿）
+        - 文件记录列表：仅显示当前选中专辑下的已转移文件记录（名称/时间/方式，仅展示）
+        - 记录存于插件自身数据，独立于日志；点击目录后自动重绘，也可手动“刷新列表”。
         """
         records = self.__get_records()
 
-        # 顶部说明与操作区
         tips_row = {
             "component": "VRow",
             "content": [
@@ -1467,11 +1461,10 @@ class LinkSync(_PluginBase):
                             "component": "VAlert",
                             "props": {"type": "info", "variant": "tonal",
                                       "density": "comfortable"},
-                            "text": "每条目录/文件提供三种删除模式："
-                                    "「文件+记录」同时删除目标文件并清除记录、「仅删文件」只删目标文件保留记录、"
-                                    "「仅清记录」只清除记录保留目标文件，点击即执行并按所选模式自动刷新列表。"
-                                    "列表记录与插件日志相互独立（记录存于插件自身数据，日志被其他插件清理不影响本条列表）。"
-                                    "修改配置请点击详情弹窗右下角的齿轮图标。",
+                            "text": "下方目录版块按目标目录下的一级专辑目录列出转移记录，"
+                                    "点击某个专辑目录，下方文件记录列表即筛选出该专辑下所有已转移文件（仅展示、不逐条删除）。"
+                                    "每个专辑提供三种删除模式：「文件+记录」同时删除该专辑及其记录、「仅删文件」只删真实文件、「仅清记录」只清除记录。"
+                                    "记录存于插件自身数据，与日志相互独立。",
                         }
                     ],
                 }
@@ -1550,18 +1543,109 @@ class LinkSync(_PluginBase):
             m = rec.get("mon_path") or ""
             by_mon.setdefault(m, {})[rec.get("rel") or ""] = rec
 
-        panels = [self._mon_panel(m, rels) for m, rels in by_mon.items()]
+        mons = list(by_mon.keys())
+        ui = self.__get_ui()
+        cur_mon = ui.get("mon") if ui.get("mon") in mons else mons[0]
+        rels = by_mon[cur_mon]
+        top_rels, root_rels = self._top_dirs(rels)
+        order = list(top_rels.keys())
+        cur = ui.get("dir", "")
+        # 归一化选中的专辑目录：无效值则回退到第一个
+        if cur != ROOT_MARK and cur not in order:
+            cur = order[0] if order else ROOT_MARK
+
+        # 计算当前文件列表
+        if cur == ROOT_MARK:
+            file_rels = root_rels
+            list_title = f"目标目录根下直接转移的文件（{len(file_rels)} 条）"
+        elif cur:
+            file_rels = top_rels[cur]
+            list_title = f"{cur} 下的已转移文件记录（{len(file_rels)} 条）"
+        else:
+            file_rels = []
+            list_title = "暂无专辑目录"
+
+        content = [tips_row, action_row, count_line]
+
+        # 监控目录切换（存在多个监控目录时）
+        if len(mons) > 1:
+            mon_btns = []
+            for m in mons:
+                chosen = (m == cur_mon)
+                mon_btns.append({
+                    "component": "VBtn",
+                    "props": {"size": "small", "density": "compact",
+                              "variant": "flat" if chosen else "outlined",
+                              "color": "primary" if chosen else "default",
+                              "prepend-icon": "mdi-check" if chosen else "mdi-folder-multiple"},
+                    "text": f"{m}（{len(by_mon[m])}）",
+                    "events": {"click": {
+                        "api": "plugin/LinkSync/select_dir",
+                        "method": "get",
+                        "params": {"apikey": settings.API_TOKEN,
+                                   "mon_path": m, "rel": cur},
+                    }},
+                })
+            content.append({
+                "component": "VRow",
+                "props": {"class": "align-center"},
+                "content": [
+                    {"component": "VCol", "props": {"cols": 12, "sm": "auto"},
+                     "content": [{"component": "span",
+                                  "props": {"class": "text-caption text-grey-darken-1"},
+                                  "text": "切换监控目录："}]},
+                    {"component": "VCol",
+                     "content": [{"component": "div",
+                                  "props": {"class": "d-flex flex-wrap ga-1"},
+                                  "content": mon_btns}]},
+                ],
+            })
+
+        # 目录版块：一级专辑目录（每种删除三种模式）
+        album_rows = []
+        for name in order:
+            album_rows.append(self._album_row(name, top_rels[name], cur, cur_mon))
+        if root_rels:
+            album_rows.append(self._root_switch(root_rels, cur, cur_mon))
+        content.append({
+            "component": "VCard",
+            "props": {"variant": "tonal", "density": "comfortable"},
+            "content": [
+                {"component": "VCardTitle",
+                 "props": {"class": "text-subtitle-2 text-primary"},
+                 "content": [{"component": "div",
+                              "text": f"目录版块（{cur_mon}）— 点击专辑切换下方列表"}]},
+                {"component": "VCardText",
+                 "props": {"class": "pa-1"},
+                 "content": album_rows if album_rows else
+                            [{"component": "div",
+                              "props": {"class": "text-grey text-caption pa-2"},
+                              "text": "该监控目录暂无转移记录"}]},
+            ],
+        })
+
+        # 文件记录列表：当前选中专辑下的文件（仅展示）
+        file_rows = [self._file_line(rel, rels.get(rel) or {}, 0) for rel in sorted(file_rels)]
+        content.append({
+            "component": "VCard",
+            "props": {"variant": "tonal", "density": "comfortable"},
+            "content": [
+                {"component": "VCardTitle",
+                 "props": {"class": "text-subtitle-2 text-primary"},
+                 "content": [{"component": "div", "text": f"文件记录列表 — {list_title}"}]},
+                {"component": "VCardText",
+                 "props": {"class": "pa-1"},
+                 "content": file_rows if file_rows else
+                            [{"component": "div",
+                              "props": {"class": "text-grey text-caption pa-2"},
+                              "text": "当前目录暂无已转移文件记录。"}]},
+            ],
+        })
+
         return [{
             "component": "div",
             "props": {"class": "d-flex flex-column ga-3"},
-            "content": [
-                tips_row,
-                action_row,
-                count_line,
-                {"component": "VExpansionPanels",
-                 "props": {"multiple": True, "variant": "accordion"},
-                 "content": panels},
-            ],
+            "content": content,
         }]
 
     def stop_service(self):
