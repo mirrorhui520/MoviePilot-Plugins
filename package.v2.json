@@ -11,5 +11,17 @@
       "v2.1": "优化执行周期输入，需要MoviePilot v2.2.1+",
       "v2.0": "兼容MoviePilot V2 版本"
     }
+  },
+  "LinkSync": {
+    "name": "实时同步",
+    "description": "监控目录文件变化，按原文件名复制、移动或硬链接到目的目录",
+    "labels": "整理",
+    "version": "1.0",
+    "icon": "sync_file.png",
+    "author": "mirrorhui520",
+    "level": 1,
+    "history": {
+      "v1.0": "初版：参考 linkmonitor 实现，支持复制/移动/硬链接三种转移方式"
+    }
   }
 }
