@@ -654,7 +654,7 @@ class LinkSync(_PluginBase):
                 "src": str(src_path),
                 "target": str(target / rel),
                 "mode": transfer_name,
-                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
             }
             self.__save_records(records)
 
@@ -803,11 +803,11 @@ class LinkSync(_PluginBase):
                 "description": "清空指定监控（或不指定则全部）目的目录内容",
             },
             {
-                "path": "/open_settings",
-                "endpoint": self.open_settings,
+                "path": "/refresh",
+                "endpoint": self.refresh_page,
                 "methods": ["GET"],
-                "summary": "跳转插件设置",
-                "description": "跳转到本插件的配置/设置页",
+                "summary": "刷新列表",
+                "description": "仅用于详情页触发页面重绘以重新加载转移记录列表",
             },
         ]
 
@@ -934,15 +934,13 @@ class LinkSync(_PluginBase):
             logger.error("清空目的目录失败：%s - %s" % (str(e), traceback.format_exc()))
             return schemas.Response(success=False, message=f"清除失败：{e}")
 
-    def open_settings(self, apikey: str) -> schemas.Response:
+    def refresh_page(self, apikey: str) -> schemas.Response:
         """
-        跳转到本插件的配置/设置页。
-        说明：JSON 详情页难以直接切换前端 SPA 标签页，此接口作为占位，
-        前端按钮资源受限时由用户在插件卡片点“编辑/设置”进入配置页。
+        详情页“刷新列表”按钮：仅返回成功，点击后触发前端重新拉取 get_page 并重绘。
         """
         if apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
-        return schemas.Response(success=True, message="请在本插件卡片上点击“设置/编辑”进入配置页")
+        return schemas.Response(success=True, message="已刷新")
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         return [
@@ -1256,28 +1254,133 @@ class LinkSync(_PluginBase):
 
     # ==================== 详情页（get_page）相关 ====================
 
+    # ---- 删除/清空三种模式的通用按钮构造 ----
+
     @staticmethod
-    def _page_del_event(mon_path: str, rel: str, is_dir: int, mode: str) -> dict:
-        """构造删除单个文件/目录的前端事件"""
+    def _del_btn_params(mon_path: str, rel: str, is_dir: int, mode: str) -> dict:
+        """文件/目录删除事件的 click 参数"""
         return {
-            "click": {
-                "api": "plugin/LinkSync/delete",
-                "method": "get",
-                "params": {
-                    "apikey": settings.API_TOKEN,
-                    "mon_path": mon_path,
-                    "rel": rel,
-                    "mode": mode,
-                    "is_dir": 1 if is_dir else 0,
-                }
-            }
+            "apikey": settings.API_TOKEN,
+            "mon_path": mon_path,
+            "rel": rel,
+            "mode": mode,
+            "is_dir": 1 if is_dir else 0,
         }
+
+    @staticmethod
+    def _clear_btn_params(mon_path: str, mode: str) -> dict:
+        """清空事件（mon_path 为空表示全部）的 click 参数"""
+        return {
+            "apikey": settings.API_TOKEN,
+            "mon_path": mon_path,
+            "mode": mode,
+        }
+
+    def _mode_group(self, api_path: str, params_func, prefix: str) -> dict:
+        """
+        构造“删除/清空”的三种模式按钮组：
+        - both   删文件+清记录
+        - target 仅删目标文件
+        - record 仅清记录
+        每个按钮各自以对应模式执行，点击后经页面 action 重新刷新列表。
+        """
+        specs = [
+            ("both", "文件+记录", "error", "flat"),
+            ("target", "仅删文件", "error", "tonal"),
+            ("record", "仅清记录", "grey-darken-2", "tonal"),
+        ]
+        return {
+            "component": "VBtnGroup",
+            "props": {"density": "compact", "rounded": "sm"},
+            "content": [
+                {
+                    "component": "VBtn",
+                    "props": {"size": "x-small", "color": color, "variant": variant},
+                    "text": label,
+                    "events": {"click": {
+                        "api": api_path,
+                        "method": "get",
+                        "params": params_func(mode),
+                    }},
+                }
+                for mode, label, color, variant in specs
+            ],
+        }
+
+    def _page_row(self, content: List[dict], indent: int) -> dict:
+        """生成一行带缩进的记录行"""
+        return {
+            "component": "div",
+            "props": {
+                "class": "d-flex align-center ga-1",
+                "style": f"padding-left: {indent * 16}px",
+            },
+            "content": content,
+        }
+
+    def _file_row(self, node: dict, mon_path: str, indent: int) -> dict:
+        """单条文件记录行：图标 + 文件名 + 时间/方式 + 三种删除模式按钮"""
+        rec = node.get("rec") or {}
+        info = []
+        if rec.get("time"):
+            info.append({"component": "span",
+                         "props": {"class": "text-caption text-grey"},
+                         "text": f'{rec.get("time")}'})
+        if rec.get("mode"):
+            info.append({"component": "VChip",
+                         "props": {"size": "x-small", "color": "primary", "variant": "tonal"},
+                         "text": rec["mode"]})
+        return self._page_row([
+            {"component": "VIcon", "props": {"icon": "mdi-file-outline",
+                                             "size": "small", "color": "grey"}},
+            {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-1 text-truncate"},
+             "text": node["rel"]},
+            *info,
+            self._mode_group("plugin/LinkSync/delete",
+                             lambda m: self._del_btn_params(mon_path, node["rel"], 0, m),
+                             prefix="删除"),
+        ], indent)
+
+    def _folder_row(self, node: dict, mon_path: str, indent: int) -> dict:
+        """目录行：图标 + 目录名 + 三种删除模式按钮（递归子级）"""
+        file_count = sum(1 for n in self._walk(node) if not n["is_dir"])
+        return self._page_row([
+            {"component": "VIcon", "props": {"icon": "mdi-folder",
+                                             "size": "small", "color": "warning"}},
+            {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-1 text-truncate"},
+             "text": f'{node["rel"]}（{file_count}）'},
+            self._mode_group("plugin/LinkSync/delete",
+                             lambda m: self._del_btn_params(mon_path, node["rel"], 1, m),
+                             prefix="删目录"),
+        ], indent)
+
+    @staticmethod
+    def _walk(node: dict):
+        """迭代目录节点及其所有子孙"""
+        yield node
+        for child in node.get("children") or []:
+            yield from _LinkSyncTreeWalker(child)
+
+    def _render_tree_rows(self, nodes: List[dict], mon_path: str,
+                          indent: int = 0) -> List[dict]:
+        """递归生成文件树行（目录行 + 其子内容，文件行）"""
+        rows = []
+        for node in nodes:
+            if node["is_dir"]:
+                rows.append(self._folder_row(node, mon_path, indent))
+                if node.get("children"):
+                    rows.extend(self._render_tree_rows(
+                        node["children"], mon_path, indent + 1))
+            else:
+                rows.append(self._file_row(node, mon_path, indent))
+        return rows
 
     @staticmethod
     def _build_tree(rels: Dict[str, dict]) -> List[dict]:
         """把 相对路径->记录 字典构造成文件夹/文件树
 
         返回节点列表，每个节点：{name, rel, is_dir, rec, children}
+        仅依据已有转移记录生成目录结构，无需读取真实文件系统。
         """
         root = []
         for rel, rec in rels.items():
@@ -1285,6 +1388,7 @@ class LinkSync(_PluginBase):
             level = root
             cur_prefix = []
             count = len(parts)
+            node = None
             for i, part in enumerate(parts):
                 cur_prefix.append(part)
                 prefix = "/".join(cur_prefix)
@@ -1304,82 +1408,25 @@ class LinkSync(_PluginBase):
                 node["rec"] = rec
         return root
 
-    @staticmethod
-    def _page_row(content: List[dict], indent: int) -> dict:
-        """生成一行（带缩进）"""
-        return {
-            "component": "div",
-            "props": {
-                "class": "d-flex align-center",
-                "style": f"padding-left: {indent * 16}px",
-            },
-            "content": content,
-        }
-
-    def _render_tree_rows(self, nodes: List[dict], mon_path: str, mode: str,
-                          indent: int = 0) -> List[dict]:
-        """递归生成文件树行（文件夹行 + 其子内容，文件行）"""
-        rows = []
-        for node in nodes:
-            if node["is_dir"]:
-                rows.append(self._page_row([
-                    {"component": "VIcon", "props": {"icon": "mdi-folder",
-                                                     "size": "small", "color": "warning"}},
-                    {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-2"},
-                     "text": node["rel"]},
-                    {"component": "VBtn", "props": {"size": "x-small", "color": "error",
-                                                    "variant": "tonal"}, "text": "删除目录",
-                     "events": self._page_del_event(mon_path, node["rel"], 1, mode)},
-                ], indent))
-                if node.get("children"):
-                    rows.extend(self._render_tree_rows(
-                        node["children"], mon_path, mode, indent + 1))
-            else:
-                rows.append(self._page_row([
-                    {"component": "VIcon", "props": {"icon": "mdi-file-outline",
-                                                     "size": "small", "color": "grey"}},
-                    {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-2"},
-                     "text": node["rel"]},
-                    {"component": "VBtn", "props": {"size": "x-small", "color": "error",
-                                                    "variant": "text"}, "text": "删除",
-                     "events": self._page_del_event(mon_path, node["rel"], 0, mode)},
-                ], indent))
-        return rows
-
-    def _mon_panel(self, mon_path: str, rels: Dict[str, dict], mode: str) -> dict:
-        """一个监控目录为一个可展开面板"""
+    def _mon_panel(self, mon_path: str, rels: Dict[str, dict]) -> dict:
+        """一个监控目录为一个可展开面板，含“清空该目标目录”操作"""
         body = [
             {
-                "component": "VRow",
+                "component": "div",
+                "props": {"class": "d-flex align-center ga-2 pa-1 mb-1"},
                 "content": [
-                    {
-                        "component": "VCol",
-                        "props": {"cols": 12},
-                        "content": [
-                            {
-                                "component": "VBtn",
-                                "props": {"size": "small", "color": "error", "variant": "tonal"},
-                                "text": "清空该目标目录",
-                                "events": {
-                                    "click": {
-                                        "api": "plugin/LinkSync/clear",
-                                        "method": "get",
-                                        "params": {
-                                            "apikey": settings.API_TOKEN,
-                                            "mon_path": mon_path,
-                                            "mode": mode,
-                                        }
-                                    }
-                                },
-                            }
-                        ],
-                    }
+                    {"component": "span",
+                     "props": {"class": "text-caption text-grey-darken-1"},
+                     "text": "清空该目标目录："},
+                    self._mode_group("plugin/LinkSync/clear",
+                                     lambda m: self._clear_btn_params(mon_path, m),
+                                     prefix="清空"),
                 ],
             },
         ]
         tree = self._build_tree(rels)
         if tree:
-            body.extend(self._render_tree_rows(tree, mon_path, mode))
+            body.extend(self._render_tree_rows(tree, mon_path))
         else:
             body.append(
                 {"component": "div", "props": {"class": "text-grey text-caption"},
@@ -1401,12 +1448,13 @@ class LinkSync(_PluginBase):
     def get_page(self) -> List[dict]:
         """
         拼装插件详情展示页（管理已转移记录）：
-        - 每个监控目录下级文件夹为单位分组，可展开查看子目录与每个文件
-        - 支持删除单个文件/目录、一键清空目标目录，以及跳转后台设置入口
+        - 顶部操作区：刷新列表 / 立即全量同步 / 一键清空全部目标目录（三种模式）
+        - 记录按监控目录下级文件夹自动聚合为目录树，可展开查看每个子目录与文件
+        - 每条目录/文件提供三种删除模式按钮，点击即按所选模式执行并自动刷新
+        - 记录存于插件自身数据，独立于日志；
+          列表不会自动轮询更新，删除/同步/全量操作后自动刷新，也可手动点“刷新列表”。
         """
         records = self.__get_records()
-        mode = self._delete_mode if self._delete_mode in DELETE_MODES else "both"
-        mode_desc = DELETE_MODES.get(mode, "同时删除目标文件并从记录移除")
 
         # 顶部说明与操作区
         tips_row = {
@@ -1420,9 +1468,11 @@ class LinkSync(_PluginBase):
                             "component": "VAlert",
                             "props": {"type": "info", "variant": "tonal",
                                       "density": "comfortable"},
-                            "text": f"删除操作按插件设置中的「详情页删除模式」执行，当前为：{mode_desc}。"
-                                    "进入本插件设置请点击详情弹窗右下角的齿轮图标。"
-                                    "列表记录与插件日志相互独立（记录存于插件自身数据，日志被其他插件清理不影响本条列表）。",
+                            "text": "每条目录/文件提供三种删除模式："
+                                    "「文件+记录」同时删除目标文件并清除记录、「仅删文件」只删目标文件保留记录、"
+                                    "「仅清记录」只清除记录保留目标文件，点击即执行并按所选模式自动刷新列表。"
+                                    "列表记录与插件日志相互独立（记录存于插件自身数据，日志被其他插件清理不影响本条列表）。"
+                                    "修改配置请点击详情弹窗右下角的齿轮图标。",
                         }
                     ],
                 }
@@ -1431,6 +1481,20 @@ class LinkSync(_PluginBase):
         action_row = {
             "component": "VRow",
             "content": [
+                {
+                    "component": "VCol",
+                    "props": {"cols": 12, "md": 4},
+                    "content": [
+                        {"component": "VBtn",
+                         "props": {"color": "primary", "variant": "flat"},
+                         "text": "刷新列表",
+                         "events": {"click": {
+                             "api": "plugin/LinkSync/refresh",
+                             "method": "get",
+                             "params": {"apikey": settings.API_TOKEN},
+                         }}}
+                    ],
+                },
                 {
                     "component": "VCol",
                     "props": {"cols": 12, "md": 4},
@@ -1449,29 +1513,18 @@ class LinkSync(_PluginBase):
                     "component": "VCol",
                     "props": {"cols": 12, "md": 4},
                     "content": [
-                        {"component": "VBtn",
-                         "props": {"color": "error", "variant": "tonal"},
-                         "text": "一键清空全部目标目录",
-                         "events": {"click": {
-                             "api": "plugin/LinkSync/clear",
-                             "method": "get",
-                             "params": {"apikey": settings.API_TOKEN,
-                                        "mon_path": "", "mode": mode},
-                         }}}
-                    ],
-                },
-                {
-                    "component": "VCol",
-                    "props": {"cols": 12, "md": 4},
-                    "content": [
-                        {"component": "VBtn",
-                         "props": {"color": "grey-darken-1", "variant": "tonal"},
-                         "text": "后台设置入口",
-                         "events": {"click": {
-                             "api": "plugin/LinkSync/open_settings",
-                             "method": "get",
-                             "params": {"apikey": settings.API_TOKEN},
-                         }}}
+                        {
+                            "component": "div",
+                            "props": {"class": "d-flex align-center ga-2"},
+                            "content": [
+                                {"component": "span",
+                                 "props": {"class": "text-caption text-grey-darken-1"},
+                                 "text": "清空全部目标目录："},
+                                self._mode_group("plugin/LinkSync/clear",
+                                                 lambda m: self._clear_btn_params("", m),
+                                                 prefix="清空"),
+                            ],
+                        }
                     ],
                 },
             ],
@@ -1479,7 +1532,7 @@ class LinkSync(_PluginBase):
         count_line = {
             "component": "div",
             "props": {"class": "text-body-2 text-grey"},
-            "text": f"共 {len(records)} 条转移记录。",
+            "text": f"共 {len(records)} 条转移记录（停止自动实时刷新，可点击上方“刷新列表”手动更新）。",
         }
 
         # 无记录时直接返回提示
@@ -1487,7 +1540,7 @@ class LinkSync(_PluginBase):
             return [{
                 "component": "div",
                 "props": {"class": "d-flex flex-column ga-3"},
-                "content": [tips_row, {"component": "div", "props": {
+                "content": [tips_row, action_row, {"component": "div", "props": {
                     "class": "text-center text-grey pa-4"},
                     "text": "暂无转移记录，新文件转移完成后会出现在这里。"}],
             }]
@@ -1498,7 +1551,7 @@ class LinkSync(_PluginBase):
             m = rec.get("mon_path") or ""
             by_mon.setdefault(m, {})[rec.get("rel") or ""] = rec
 
-        panels = [self._mon_panel(m, rels, mode) for m, rels in by_mon.items()]
+        panels = [self._mon_panel(m, rels) for m, rels in by_mon.items()]
         return [{
             "component": "div",
             "props": {"class": "d-flex flex-column ga-3"},
