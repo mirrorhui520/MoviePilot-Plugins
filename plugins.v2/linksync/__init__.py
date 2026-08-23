@@ -1354,12 +1354,11 @@ class LinkSync(_PluginBase):
                              prefix="删目录"),
         ], indent)
 
-    @staticmethod
-    def _walk(node: dict):
+    def _walk(self, node: dict):
         """迭代目录节点及其所有子孙"""
         yield node
         for child in node.get("children") or []:
-            yield from _LinkSyncTreeWalker(child)
+            yield from self._walk(child)
 
     def _render_tree_rows(self, nodes: List[dict], mon_path: str,
                           indent: int = 0) -> List[dict]:
