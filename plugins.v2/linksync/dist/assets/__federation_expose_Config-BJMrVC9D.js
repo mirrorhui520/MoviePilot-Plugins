@@ -73,7 +73,7 @@ return (_ctx, _cache) => {
   const _component_v_form = _resolveComponent("v-form");
 
   return (_openBlock(), _createBlock(_component_v_form, {
-    class: "pa-4",
+    class: "pa-6",
     style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable"}
   }, {
     default: _withCtx(() => [

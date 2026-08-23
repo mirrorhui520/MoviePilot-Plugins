@@ -56,7 +56,7 @@ function notifyClose() {
 
 <template>
   <v-form
-    class="pa-4"
+    class="pa-6"
     style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable"
   >
     <v-row>

@@ -13,7 +13,7 @@ const {createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withC
 
 const _hoisted_1 = {
   class: "plugin-page d-flex flex-column ga-3",
-  style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable","padding":"16px","box-sizing":"border-box"}
+  style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable","padding":"24px","box-sizing":"border-box"}
 };
 const _hoisted_2 = { class: "text-caption text-grey" };
 const _hoisted_3 = {
@@ -29,12 +29,12 @@ const _hoisted_5 = {
   class: "pa-4"
 };
 const _hoisted_6 = ["onClick"];
-const _hoisted_7 = { class: "text-truncate text-body-2" };
+const _hoisted_7 = { class: "text-truncate text-caption" };
 const _hoisted_8 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
 };
-const _hoisted_9 = { class: "text-truncate text-body-2" };
+const _hoisted_9 = { class: "text-truncate text-caption" };
 const _hoisted_10 = {
   key: 1,
   class: "text-grey text-caption pa-2"
@@ -47,7 +47,7 @@ const _hoisted_12 = {
   key: 0,
   class: "d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded album-row"
 };
-const _hoisted_13 = { class: "text-truncate text-body-2" };
+const _hoisted_13 = { class: "text-truncate text-caption" };
 const _hoisted_14 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
@@ -488,7 +488,7 @@ return (_ctx, _cache) => {
           default: _withCtx(() => [
             _createVNode(_component_v_col, {
               cols: "12",
-              md: "6"
+              md: "7"
             }, {
               default: _withCtx(() => [
                 _createVNode(_component_v_card, {
@@ -505,11 +505,12 @@ return (_ctx, _cache) => {
                           modelValue: search.value,
                           "onUpdate:modelValue": _cache[2] || (_cache[2] = $event => ((search).value = $event)),
                           density: "compact",
+                          size: "small",
                           "hide-details": "",
                           clearable: "",
                           placeholder: "搜索专辑",
                           "prepend-inner-icon": "mdi-magnify",
-                          style: {"max-width":"220px"}
+                          style: {"max-width":"200px"}
                         }, null, 8, ["modelValue"]),
                         _createVNode(_component_v_btn, {
                           icon: "",
@@ -693,7 +694,7 @@ return (_ctx, _cache) => {
             }),
             _createVNode(_component_v_col, {
               cols: "12",
-              md: "6"
+              md: "5"
             }, {
               default: _withCtx(() => [
                 _createVNode(_component_v_card, {
@@ -734,7 +735,7 @@ return (_ctx, _cache) => {
                                     _: 1
                                   }),
                                   _createElementVNode("span", {
-                                    class: "text-body-2 text-truncate",
+                                    class: "text-caption text-truncate",
                                     style: {"flex":"1 1 auto","min-width":"0"},
                                     title: f.rel
                                   }, _toDisplayString(f.rel), 9, _hoisted_16),
@@ -909,6 +910,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-3a1bcdf5"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-e4fa5a38"]]);
 
 export { Page as default };

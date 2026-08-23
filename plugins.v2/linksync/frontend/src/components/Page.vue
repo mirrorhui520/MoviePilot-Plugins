@@ -201,7 +201,7 @@ function onPageSizeChange() {
 <template>
   <div
     class="plugin-page d-flex flex-column ga-3"
-    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable; padding: 16px; box-sizing: border-box"
+    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable; padding: 24px; box-sizing: border-box"
   >
     <v-alert type="info" variant="tonal" density="compact">
       目录版块展示目标目录下的一级专辑，点击专辑筛选右侧文件记录列表；删除仅作用于目标目录下的该专辑及其记录，不影响源（监控）目录。
@@ -268,7 +268,7 @@ function onPageSizeChange() {
     <!-- 左右分栏：目录版块 + 文件记录列表 -->
     <v-row v-else dense>
       <!-- 目录版块 -->
-      <v-col cols="12" md="6">
+      <v-col cols="12" md="7">
         <v-card variant="tonal" density="comfortable" class="h-100">
           <v-card-title class="d-flex align-center ga-2 text-subtitle-2 text-primary">
             <span class="text-truncate" style="flex: 1 1 auto; min-width: 0">目录版块 — {{ curMonObj?.target_root || '' }} / 一级专辑</span>
@@ -276,11 +276,12 @@ function onPageSizeChange() {
             <v-text-field
               v-model="search"
               density="compact"
+              size="small"
               hide-details
               clearable
               placeholder="搜索专辑"
               prepend-inner-icon="mdi-magnify"
-              style="max-width: 220px"
+              style="max-width: 200px"
             />
             <v-btn
               icon
@@ -313,7 +314,7 @@ function onPageSizeChange() {
                   >
                     {{ curDir === album.name ? 'mdi-check' : 'mdi-folder' }}
                   </v-icon>
-                  <span class="text-truncate text-body-2">{{ album.name }}（{{ album.count }}）</span>
+                  <span class="text-truncate text-caption">{{ album.name }}（{{ album.count }}）</span>
                 </div>
                 <span v-if="album.last_time" class="text-caption text-grey flex-shrink-0 ms-1">
                   {{ album.last_time }}
@@ -347,7 +348,7 @@ function onPageSizeChange() {
                   >
                     {{ curDir === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted' }}
                   </v-icon>
-                  <span class="text-truncate text-body-2">根目录下文件（{{ curMonObj.root_files.length }}）</span>
+                  <span class="text-truncate text-caption">根目录下文件（{{ curMonObj.root_files.length }}）</span>
                 </div>
               </div>
               <div v-if="filteredAlbums.length === 0 && !curMonObj?.root_files?.length" class="text-grey text-caption pa-2">
@@ -366,7 +367,7 @@ function onPageSizeChange() {
                   @click="collapsed = false"
                 >
                   <v-icon size="small" class="me-1 flex-shrink-0" color="primary">mdi-check</v-icon>
-                  <span class="text-truncate text-body-2">{{ selectedRow.name }}（{{ selectedRow.count }}）</span>
+                  <span class="text-truncate text-caption">{{ selectedRow.name }}（{{ selectedRow.count }}）</span>
                 </div>
                 <span v-if="selectedRow.last_time" class="text-caption text-grey flex-shrink-0 ms-1">
                   {{ selectedRow.last_time }}
@@ -393,7 +394,7 @@ function onPageSizeChange() {
       </v-col>
 
       <!-- 文件记录列表 -->
-      <v-col cols="12" md="6">
+      <v-col cols="12" md="5">
         <v-card variant="tonal" density="comfortable" class="h-100">
           <v-card-title class="text-subtitle-2 text-primary text-truncate">
             文件记录列表 — {{ curDir === ROOT ? '目标目录根下直接转移的文件' : (curDir || '请选择专辑') }}
@@ -403,7 +404,7 @@ function onPageSizeChange() {
             <template v-else>
               <div v-for="f in pagedFiles" :key="f.rel" class="d-flex align-center ga-1 py-1 px-2">
                 <v-icon size="small" color="grey" class="flex-shrink-0">mdi-music-note-plus</v-icon>
-                <span class="text-body-2 text-truncate" style="flex: 1 1 auto; min-width: 0" :title="f.rel">
+                <span class="text-caption text-truncate" style="flex: 1 1 auto; min-width: 0" :title="f.rel">
                   {{ f.rel }}
                 </span>
                 <span v-if="f.time" class="text-caption text-grey flex-shrink-0">{{ f.time }}</span>
