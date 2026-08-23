@@ -1,0 +1,7 @@
+# 前端构建产物需要随插件提交（插件市场安装时不会重新构建前端），
+# 覆盖根目录 .gitignore 中 dist/ 的忽略规则。
+!dist/
+!dist/**
+
+# 前端依赖不需要提交
+frontend/node_modules/

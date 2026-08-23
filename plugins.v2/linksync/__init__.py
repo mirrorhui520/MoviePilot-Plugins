@@ -230,7 +230,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.8"
+    plugin_version = "1.9"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -778,6 +778,15 @@ class LinkSync(_PluginBase):
         return self._enabled
 
     @staticmethod
+    def get_render_mode() -> Tuple[str, str]:
+        """
+        获取插件渲染模式：使用 Vue 联邦远程组件渲染详情页与配置页
+        :return: 1、渲染模式，支持 vue/vuetify，默认 vuetify
+        :return: 2、组件路径，默认 dist/assets
+        """
+        return "vue", "dist/assets"
+
+    @staticmethod
     def get_command() -> List[Dict[str, Any]]:
         """
         定义远程控制命令
@@ -799,13 +808,23 @@ class LinkSync(_PluginBase):
                 "path": "/realtime_sync",
                 "endpoint": self.sync,
                 "methods": ["GET"],
+                "auth": "bear",
                 "summary": "实时同步",
                 "description": "实时同步",
+            },
+            {
+                "path": "/page_data",
+                "endpoint": self.page_data,
+                "methods": ["GET"],
+                "auth": "bear",
+                "summary": "详情页数据",
+                "description": "返回转移记录聚合后的结构化数据（按监控目录/专辑分组）供前端渲染",
             },
             {
                 "path": "/delete",
                 "endpoint": self.delete_record,
                 "methods": ["GET"],
+                "auth": "bear",
                 "summary": "删除转移项",
                 "description": "按模式删除目标文件/记录",
             },
@@ -813,6 +832,7 @@ class LinkSync(_PluginBase):
                 "path": "/clear",
                 "endpoint": self.clear,
                 "methods": ["GET"],
+                "auth": "bear",
                 "summary": "清空目标目录",
                 "description": "清空指定监控（或不指定则全部）目的目录内容",
             },
@@ -820,6 +840,7 @@ class LinkSync(_PluginBase):
                 "path": "/refresh",
                 "endpoint": self.refresh_page,
                 "methods": ["GET"],
+                "auth": "bear",
                 "summary": "刷新列表",
                 "description": "仅用于详情页触发页面重绘以重新加载转移记录列表",
             },
@@ -827,6 +848,7 @@ class LinkSync(_PluginBase):
                 "path": "/select_dir",
                 "endpoint": self.select_dir,
                 "methods": ["GET"],
+                "auth": "bear",
                 "summary": "切换查看目录",
                 "description": "记录当前选中的监控目录与专辑目录，触发详情页重绘按目录过滤文件记录列表",
             },
@@ -852,26 +874,78 @@ class LinkSync(_PluginBase):
                 "kwargs": {}
             }]
 
-    def sync(self, apikey: str) -> schemas.Response:
+    def sync(self, apikey: str = "") -> schemas.Response:
         """
         API调用目录同步
         """
-        if apikey != settings.API_TOKEN:
+        if apikey and apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         self.sync_all()
         return schemas.Response(success=True)
 
-    def delete_record(self, apikey: str, mon_path: str = "", rel: str = "",
+    def page_data(self, apikey: str = "") -> schemas.Response:
+        """
+        详情页数据：将全部转移记录聚合为结构化数据（按监控目录 -> 一级专辑目录分组），
+        供前端 Vue 联邦组件一次性加载后本地完成搜索/分页/折叠等交互。
+        删除等操作不在此接口，仍走 /delete、/clear。
+        """
+        records = self.__get_records()
+        # 按监控目录分组：mon -> {rel: rec}
+        by_mon: Dict[str, Dict[str, dict]] = {}
+        for rec in records.values():
+            m = rec.get("mon_path") or ""
+            by_mon.setdefault(m, {})[rec.get("rel") or ""] = rec
+        mons = []
+        for m, rels in by_mon.items():
+            tgt_root = self.__target_root(m)
+            top_rels, root_rels = self._top_dirs(rels)
+            albums = []
+            for name, fl in top_rels.items():
+                files = []
+                last_time = ""
+                for rel in sorted(fl):
+                    rec = rels.get(rel) or {}
+                    t = rec.get("time", "")
+                    files.append({
+                        "rel": rel,
+                        "time": t,
+                        "mode": rec.get("mode", ""),
+                    })
+                    if t > last_time:
+                        last_time = t
+                albums.append({
+                    "name": name,
+                    "count": len(fl),
+                    "last_time": last_time,
+                    "files": files,
+                })
+            albums.sort(key=lambda x: x["name"].lower())
+            root_files = [{
+                "rel": r,
+                "time": (rels.get(r) or {}).get("time", ""),
+                "mode": (rels.get(r) or {}).get("mode", ""),
+            } for r in sorted(root_rels)]
+            mons.append({
+                "mon": m,
+                "target_root": str(tgt_root) if tgt_root else "",
+                "total": len(rels),
+                "albums": albums,
+                "root_files": root_files,
+            })
+        return schemas.Response(success=True,
+                                data={"total": len(records), "mons": mons})
+
+    def delete_record(self, apikey: str = "", mon_path: str = "", rel: str = "",
                       mode: str = "both", is_dir: int = 0) -> schemas.Response:
         """
         删除转移项（文件或目录）
-        :param apikey: API 密钥
+        :param apikey: API 密钥（可选，bear 认证下可省略）
         :param mon_path: 监控目录
         :param rel: 相对路径（文件或目录）
         :param mode: both/target/record
         :param is_dir: 是否按目录删除
         """
-        if apikey != settings.API_TOKEN:
+        if apikey and apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         if not mon_path or not rel:
             return schemas.Response(success=False, message="参数不完整")
@@ -912,15 +986,15 @@ class LinkSync(_PluginBase):
             logger.error("删除转移项失败：%s - %s" % (str(e), traceback.format_exc()))
             return schemas.Response(success=False, message=f"删除失败：{e}")
 
-    def clear(self, apikey: str, mon_path: str = "",
+    def clear(self, apikey: str = "", mon_path: str = "",
               mode: str = "both") -> schemas.Response:
         """
         清空目的目录下所有文件与记录（不指定 mon_path 则清空全部）
-        :param apikey: API 密钥
+        :param apikey: API 密钥（可选，bear 认证下可省略）
         :param mon_path: 监控目录，为空表示全部
         :param mode: both/target/record
         """
-        if apikey != settings.API_TOKEN:
+        if apikey and apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         mode = mode if mode in DELETE_MODES else "both"
         records = self.__get_records()
@@ -955,22 +1029,22 @@ class LinkSync(_PluginBase):
             logger.error("清空目的目录失败：%s - %s" % (str(e), traceback.format_exc()))
             return schemas.Response(success=False, message=f"清除失败：{e}")
 
-    def refresh_page(self, apikey: str) -> schemas.Response:
+    def refresh_page(self, apikey: str = "") -> schemas.Response:
         """
         详情页“刷新列表”按钮：仅返回成功，点击后触发前端重新拉取 get_page 并重绘。
         """
-        if apikey != settings.API_TOKEN:
+        if apikey and apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         return schemas.Response(success=True, message="已刷新")
 
-    def select_dir(self, apikey: str, mon_path: str = "", rel: str = "") -> schemas.Response:
+    def select_dir(self, apikey: str = "", mon_path: str = "", rel: str = "") -> schemas.Response:
         """
         详情页切换查看的目录：记录当前选中的监控目录与专辑目录，
         触发前端重绘 get_page 以按所选专辑过滤文件记录列表。
         :param mon_path: 当前监控目录
         :param rel: 选中的专辑目录名，"_ROOT_" 表示查看目标目录根下文件
         """
-        if apikey != settings.API_TOKEN:
+        if apikey and apikey != settings.API_TOKEN:
             return schemas.Response(success=False, message="API密钥错误")
         ui = self.__get_ui()
         ui["mon"] = mon_path or ""
