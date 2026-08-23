@@ -31,6 +31,9 @@ TRANSFER_NAMES: Dict[str, str] = {
     "link": "硬链接",
 }
 
+# 目标文件已存在且选择跳过时的返回标记
+EXISTS_SKIPPED = "__EXISTS_SKIPPED__"
+
 
 def _has_suffix_in(file_path: Path, extensions: List[str]) -> bool:
     """
@@ -207,7 +210,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.2"
+    plugin_version = "1.3"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -247,9 +250,12 @@ class LinkSync(_PluginBase):
     _event = threading.Event()
     # 转移结果统计（用于通知汇总）
     _notify_success = 0
+    _notify_skip = 0
     _notify_fail = 0
     _notify_lock = threading.Lock()
     _flush_timer = None
+    # 是否处于全量同步中（全量同步期间不触发增量防抖通知）
+    _full_sync = False
     # 并发转移线程池
     _executor: Optional[ThreadPoolExecutor] = None
 
@@ -414,24 +420,30 @@ class LinkSync(_PluginBase):
         # 重置统计与待发送通知
         self.__cancel_flush()
         self.__reset_notify()
+        # 标记全量同步，期间增量防抖通知不触发
+        self._full_sync = True
         # 收集所有待处理文件
         tasks = []
         for mon_path in self._dirconf.keys():
             # 遍历目录下所有文件
             for file_path in SystemUtils.list_files(Path(mon_path), ['.*']):
                 tasks.append((str(file_path), mon_path))
-        # 并发转移
-        if self._executor and tasks:
-            try:
-                list(self._executor.map(lambda item: self.__handle_file(item[0], item[1]), tasks))
-            except Exception as e:
-                logger.error(f"全量实时同步发生错误：{e}")
-        else:
-            for file_path, mon_path in tasks:
-                self.__handle_file(file_path, mon_path)
-        # 立即汇总发送一次通知
-        self.__flush_notify()
+        try:
+            # 并发转移
+            if self._executor and tasks:
+                try:
+                    list(self._executor.map(lambda item: self.__handle_file(item[0], item[1]), tasks))
+                except Exception as e:
+                    logger.error(f"全量实时同步发生错误：{e}")
+            else:
+                for file_path, mon_path in tasks:
+                    self.__handle_file(file_path, mon_path)
+        finally:
+            self._full_sync = False
+            self.__cancel_flush()
+        # 所有文件处理完毕，先输出完成日志，再汇总发送一次通知
         logger.info("全量实时同步完成！")
+        self.__flush_notify()
 
     def event_handler(self, event, mon_path: str, text: str, event_path: str):
         """
@@ -477,7 +489,7 @@ class LinkSync(_PluginBase):
                 except Exception as err:
                     return False, f"覆盖前删除已存在文件失败：{err}"
             else:
-                return True, "目标路径文件已存在（跳过）"
+                return True, EXISTS_SKIPPED
 
         # 创建目标目录
         if not new_path.parent.exists():
@@ -547,21 +559,24 @@ class LinkSync(_PluginBase):
 
             # 统计结果，汇总到通知中
             with self._notify_lock:
-                if state:
+                if errmsg == EXISTS_SKIPPED:
+                    self._notify_skip += 1
+                    logger.info(f"{file_path.name} 文件已存在，跳过成功")
+                elif state:
                     self._notify_success += 1
                     logger.info(f"{file_path.name} {transfer_name}成功")
                 else:
                     self._notify_fail += 1
                     logger.warn(f"{file_path.name} {transfer_name}失败：{errmsg}")
 
-            # 实时模式下防抖汇总通知
-            if self._notify:
+            # 增量监控时防抖汇总通知；全量同步期间不触发，由全量结束统一汇总
+            if self._notify and not self._full_sync:
                 self.__schedule_notify()
 
         except Exception as e:
             with self._notify_lock:
                 self._notify_fail += 1
-            if self._notify:
+            if self._notify and not self._full_sync:
                 self.__schedule_notify()
             logger.error("目录监控发生错误：%s - %s" % (str(e), traceback.format_exc()))
 
@@ -571,6 +586,7 @@ class LinkSync(_PluginBase):
         """
         with self._notify_lock:
             self._notify_success = 0
+            self._notify_skip = 0
             self._notify_fail = 0
 
     def __cancel_flush(self):
@@ -605,16 +621,22 @@ class LinkSync(_PluginBase):
         self._flush_timer = None
         with self._notify_lock:
             success = self._notify_success
+            skip = self._notify_skip
             fail = self._notify_fail
             self._notify_success = 0
+            self._notify_skip = 0
             self._notify_fail = 0
-        total = success + fail
+        total = success + skip + fail
         if not self._notify or total == 0:
             return
+        text = f"本批转移完成：成功 {success} 个"
+        if skip:
+            text += f"，跳过 {skip} 个"
+        text += f"，失败 {fail} 个（共 {total} 个）"
         self.post_message(
             mtype=NotificationType.Manual,
             title="实时同步完成！",
-            text=f"本批转移完成：成功 {success} 个，失败 {fail} 个（共 {total} 个）"
+            text=text
         )
 
     def get_state(self) -> bool:
