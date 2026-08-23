@@ -3,14 +3,20 @@ import { importShared } from './__federation_fn_import-JrT3xvdd.js';
 const {createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withCtx:_withCtx,createVNode:_createVNode,createElementVNode:_createElementVNode,renderList:_renderList,Fragment:_Fragment,openBlock:_openBlock,createElementBlock:_createElementBlock,toDisplayString:_toDisplayString,createBlock:_createBlock,createCommentVNode:_createCommentVNode,normalizeClass:_normalizeClass} = await importShared('vue');
 
 
-const _hoisted_1 = { class: "plugin-page d-flex flex-column ga-3" };
+const _hoisted_1 = {
+  class: "plugin-page d-flex flex-column ga-3",
+  style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable"}
+};
 const _hoisted_2 = { class: "d-flex align-center ga-2" };
 const _hoisted_3 = { class: "text-caption text-grey" };
 const _hoisted_4 = {
   key: 1,
   class: "text-center text-grey pa-6"
 };
-const _hoisted_5 = { class: "text-truncate" };
+const _hoisted_5 = {
+  class: "text-truncate",
+  style: {"flex":"1 1 auto","min-width":"0"}
+};
 const _hoisted_6 = {
   key: 0,
   class: "pa-4"
@@ -280,10 +286,10 @@ return (_ctx, _cache) => {
     _createVNode(_component_v_alert, {
       type: "info",
       variant: "tonal",
-      density: "comfortable"
+      density: "compact"
     }, {
       default: _withCtx(() => [...(_cache[11] || (_cache[11] = [
-        _createTextVNode(" 下方目录版块展示目标目录下的一级专辑（由转移记录生成）。点击某个专辑，右侧文件记录列表即筛选出该专辑下所有已转移文件（仅展示、不逐条删除）。 每个专辑的删除（文件+记录 / 仅删文件 / 仅清记录）仅作用于目标目录下的该专辑目录及其记录，不影响源（监控）目录。记录存于插件自身数据，与日志相互独立。 ", -1)
+        _createTextVNode(" 目录版块展示目标目录下的一级专辑，点击专辑筛选右侧文件记录列表；删除仅作用于目标目录下的该专辑及其记录，不影响源（监控）目录。 ", -1)
       ]))]),
       _: 1
     }),
@@ -399,7 +405,7 @@ return (_ctx, _cache) => {
               ]))]),
               _: 1
             }),
-            _createVNode(_component_v_col, null, {
+            _createVNode(_component_v_col, { style: {"min-width":"0"} }, {
               default: _withCtx(() => [
                 _createVNode(_component_v_btn_toggle, {
                   modelValue: curMon.value,
@@ -408,7 +414,9 @@ return (_ctx, _cache) => {
                     onMonChange
                   ],
                   mandatory: "",
-                  density: "compact"
+                  density: "compact",
+                  class: "w-100",
+                  style: {"overflow-x":"auto","max-width":"100%"}
                 }, {
                   default: _withCtx(() => [
                     (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(data.value.mons, (m) => {
@@ -544,7 +552,7 @@ return (_ctx, _cache) => {
                     }),
                     _createVNode(_component_v_card_text, {
                       class: "pa-1",
-                      style: {"max-height":"420px","overflow-y":"auto"}
+                      style: {"max-height":"420px","overflow-y":"auto","scrollbar-gutter":"stable"}
                     }, {
                       default: _withCtx(() => [
                         (loading.value)
@@ -711,7 +719,7 @@ return (_ctx, _cache) => {
                     }),
                     _createVNode(_component_v_card_text, {
                       class: "pa-1",
-                      style: {"max-height":"420px","overflow-y":"auto"}
+                      style: {"max-height":"420px","overflow-y":"auto","scrollbar-gutter":"stable"}
                     }, {
                       default: _withCtx(() => [
                         (loading.value)

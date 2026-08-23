@@ -196,10 +196,12 @@ function onPageSizeChange() {
 </script>
 
 <template>
-  <div class="plugin-page d-flex flex-column ga-3">
-    <v-alert type="info" variant="tonal" density="comfortable">
-      下方目录版块展示目标目录下的一级专辑（由转移记录生成）。点击某个专辑，右侧文件记录列表即筛选出该专辑下所有已转移文件（仅展示、不逐条删除）。
-      每个专辑的删除（文件+记录 / 仅删文件 / 仅清记录）仅作用于目标目录下的该专辑目录及其记录，不影响源（监控）目录。记录存于插件自身数据，与日志相互独立。
+  <div
+    class="plugin-page d-flex flex-column ga-3"
+    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable"
+  >
+    <v-alert type="info" variant="tonal" density="compact">
+      目录版块展示目标目录下的一级专辑，点击专辑筛选右侧文件记录列表；删除仅作用于目标目录下的该专辑及其记录，不影响源（监控）目录。
     </v-alert>
 
     <!-- 顶部操作区 -->
@@ -227,8 +229,15 @@ function onPageSizeChange() {
       <v-col cols="12" sm="auto">
         <span class="text-caption text-grey-darken-1">切换监控目录：</span>
       </v-col>
-      <v-col>
-        <v-btn-toggle v-model="curMon" mandatory density="compact" @update:model-value="onMonChange">
+      <v-col style="min-width: 0">
+        <v-btn-toggle
+          v-model="curMon"
+          mandatory
+          density="compact"
+          class="w-100"
+          style="overflow-x: auto; max-width: 100%"
+          @update:model-value="onMonChange"
+        >
           <v-btn v-for="m in data.mons" :key="m.mon" :value="m.mon" size="small">
             {{ m.mon }}（{{ m.total }}）
           </v-btn>
@@ -264,7 +273,7 @@ function onPageSizeChange() {
       <v-col cols="12" md="6">
         <v-card variant="tonal" density="comfortable" class="h-100">
           <v-card-title class="d-flex align-center ga-2 text-subtitle-2 text-primary">
-            <span class="text-truncate">目录版块 — {{ curMonObj?.target_root || '' }} / 一级专辑</span>
+            <span class="text-truncate" style="flex: 1 1 auto; min-width: 0">目录版块 — {{ curMonObj?.target_root || '' }} / 一级专辑</span>
             <v-spacer />
             <v-text-field
               v-model="search"
@@ -285,7 +294,7 @@ function onPageSizeChange() {
               <v-icon>{{ collapsed ? 'mdi-chevron-down' : 'mdi-chevron-up' }}</v-icon>
             </v-btn>
           </v-card-title>
-          <v-card-text class="pa-1" style="max-height: 420px; overflow-y: auto">
+          <v-card-text class="pa-1" style="max-height: 420px; overflow-y: auto; scrollbar-gutter: stable">
             <div v-if="loading" class="pa-4"><v-progress-linear indeterminate /></div>
             <template v-else-if="!collapsed">
               <div
@@ -387,7 +396,7 @@ function onPageSizeChange() {
           <v-card-title class="text-subtitle-2 text-primary text-truncate">
             文件记录列表 — {{ curDir === ROOT ? '目标目录根下直接转移的文件' : (curDir || '请选择专辑') }}
           </v-card-title>
-          <v-card-text class="pa-1" style="max-height: 420px; overflow-y: auto">
+          <v-card-text class="pa-1" style="max-height: 420px; overflow-y: auto; scrollbar-gutter: stable">
             <div v-if="loading" class="pa-4"><v-progress-linear indeterminate /></div>
             <template v-else>
               <div v-for="f in pagedFiles" :key="f.rel" class="d-flex align-center ga-1 py-1 px-2">

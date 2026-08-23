@@ -72,7 +72,10 @@ return (_ctx, _cache) => {
   const _component_v_btn = _resolveComponent("v-btn");
   const _component_v_form = _resolveComponent("v-form");
 
-  return (_openBlock(), _createBlock(_component_v_form, null, {
+  return (_openBlock(), _createBlock(_component_v_form, {
+    class: "pa-4",
+    style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable"}
+  }, {
     default: _withCtx(() => [
       _createVNode(_component_v_row, null, {
         default: _withCtx(() => [
@@ -128,7 +131,8 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[3] || (_cache[3] = $event => ((config.value.mode) = $event)),
                 items: modeItems,
                 label: "监控模式",
-                density: "compact"
+                density: "compact",
+                "hide-details": ""
               }, null, 8, ["modelValue"])
             ]),
             _: 1
@@ -143,7 +147,8 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[4] || (_cache[4] = $event => ((config.value.transfer_type) = $event)),
                 items: transferItems,
                 label: "转移方式",
-                density: "compact"
+                density: "compact",
+                "hide-details": ""
               }, null, 8, ["modelValue"])
             ]),
             _: 1
@@ -157,7 +162,8 @@ return (_ctx, _cache) => {
                 modelValue: config.value.size,
                 "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((config.value.size) = $event)),
                 label: "最小文件大小（KB）",
-                density: "compact"
+                density: "compact",
+                "hide-details": ""
               }, null, 8, ["modelValue"])
             ]),
             _: 1
@@ -172,6 +178,7 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[6] || (_cache[6] = $event => ((config.value.flush_interval) = $event)),
                 label: "通知汇总刷新间隔（秒）",
                 density: "compact",
+                "hide-details": "",
                 placeholder: "默认3，实时事件间隔内聚合为一条通知"
               }, null, 8, ["modelValue"])
             ]),
@@ -187,6 +194,7 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[7] || (_cache[7] = $event => ((config.value.concurrency) = $event)),
                 label: "并发转移数",
                 density: "compact",
+                "hide-details": "",
                 placeholder: "默认4，全量同步并行转移数量"
               }, null, 8, ["modelValue"])
             ]),
@@ -202,7 +210,8 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((config.value.exists_mode) = $event)),
                 items: existsItems,
                 label: "目标已存在处理",
-                density: "compact"
+                density: "compact",
+                "hide-details": ""
               }, null, 8, ["modelValue"])
             ]),
             _: 1
@@ -217,7 +226,8 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((config.value.delete_mode) = $event)),
                 items: deleteItems,
                 label: "详情页删除模式",
-                density: "compact"
+                density: "compact",
+                "hide-details": ""
               }, null, 8, ["modelValue"])
             ]),
             _: 1
@@ -229,6 +239,7 @@ return (_ctx, _cache) => {
                 "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((config.value.cron) = $event)),
                 label: "定时全量同步周期",
                 density: "compact",
+                "hide-details": "",
                 placeholder: "5位cron表达式，留空关闭"
               }, null, 8, ["modelValue"])
             ]),

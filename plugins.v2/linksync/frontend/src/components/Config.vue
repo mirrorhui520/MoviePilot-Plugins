@@ -55,7 +55,10 @@ function notifyClose() {
 </script>
 
 <template>
-  <v-form>
+  <v-form
+    class="pa-4"
+    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable"
+  >
     <v-row>
       <v-col cols="12" md="4">
         <v-switch v-model="config.enabled" label="启用插件" color="primary" />
@@ -67,19 +70,20 @@ function notifyClose() {
         <v-switch v-model="config.onlyonce" label="立即运行一次" color="primary" />
       </v-col>
       <v-col cols="12" md="4">
-        <v-select v-model="config.mode" :items="modeItems" label="监控模式" density="compact" />
+        <v-select v-model="config.mode" :items="modeItems" label="监控模式" density="compact" hide-details />
       </v-col>
       <v-col cols="12" md="4">
-        <v-select v-model="config.transfer_type" :items="transferItems" label="转移方式" density="compact" />
+        <v-select v-model="config.transfer_type" :items="transferItems" label="转移方式" density="compact" hide-details />
       </v-col>
       <v-col cols="12" md="4">
-        <v-text-field v-model="config.size" label="最小文件大小（KB）" density="compact" />
+        <v-text-field v-model="config.size" label="最小文件大小（KB）" density="compact" hide-details />
       </v-col>
       <v-col cols="12" md="4">
         <v-text-field
           v-model="config.flush_interval"
           label="通知汇总刷新间隔（秒）"
           density="compact"
+          hide-details
           placeholder="默认3，实时事件间隔内聚合为一条通知"
         />
       </v-col>
@@ -88,20 +92,22 @@ function notifyClose() {
           v-model="config.concurrency"
           label="并发转移数"
           density="compact"
+          hide-details
           placeholder="默认4，全量同步并行转移数量"
         />
       </v-col>
       <v-col cols="12" md="4">
-        <v-select v-model="config.exists_mode" :items="existsItems" label="目标已存在处理" density="compact" />
+        <v-select v-model="config.exists_mode" :items="existsItems" label="目标已存在处理" density="compact" hide-details />
       </v-col>
       <v-col cols="12" md="6">
-        <v-select v-model="config.delete_mode" :items="deleteItems" label="详情页删除模式" density="compact" />
+        <v-select v-model="config.delete_mode" :items="deleteItems" label="详情页删除模式" density="compact" hide-details />
       </v-col>
       <v-col cols="12">
         <v-text-field
           v-model="config.cron"
           label="定时全量同步周期"
           density="compact"
+          hide-details
           placeholder="5位cron表达式，留空关闭"
         />
       </v-col>
