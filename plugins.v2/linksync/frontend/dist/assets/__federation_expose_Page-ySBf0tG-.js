@@ -1,11 +1,19 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
 
+const _export_sfc = (sfc, props) => {
+  const target = sfc.__vccOpts || sfc;
+  for (const [key, val] of props) {
+    target[key] = val;
+  }
+  return target;
+};
+
 const {createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withCtx:_withCtx,createVNode:_createVNode,createElementVNode:_createElementVNode,renderList:_renderList,Fragment:_Fragment,openBlock:_openBlock,createElementBlock:_createElementBlock,toDisplayString:_toDisplayString,createBlock:_createBlock,createCommentVNode:_createCommentVNode,normalizeClass:_normalizeClass} = await importShared('vue');
 
 
 const _hoisted_1 = {
   class: "plugin-page d-flex flex-column ga-3",
-  style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable"}
+  style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable","padding":"16px","box-sizing":"border-box"}
 };
 const _hoisted_2 = { class: "text-caption text-grey" };
 const _hoisted_3 = {
@@ -20,40 +28,44 @@ const _hoisted_5 = {
   key: 0,
   class: "pa-4"
 };
-const _hoisted_6 = {
+const _hoisted_6 = ["onClick"];
+const _hoisted_7 = { class: "text-truncate text-body-2" };
+const _hoisted_8 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
 };
-const _hoisted_7 = {
+const _hoisted_9 = { class: "text-truncate text-body-2" };
+const _hoisted_10 = {
   key: 1,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_8 = {
+const _hoisted_11 = {
   key: 2,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_9 = {
+const _hoisted_12 = {
   key: 0,
-  class: "d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded"
+  class: "d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded album-row"
 };
-const _hoisted_10 = {
+const _hoisted_13 = { class: "text-truncate text-body-2" };
+const _hoisted_14 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
 };
-const _hoisted_11 = {
+const _hoisted_15 = {
   key: 0,
   class: "pa-4"
 };
-const _hoisted_12 = ["title"];
-const _hoisted_13 = {
+const _hoisted_16 = ["title"];
+const _hoisted_17 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0"
 };
-const _hoisted_14 = {
+const _hoisted_18 = {
   key: 0,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_15 = { class: "text-body-2 text-grey" };
+const _hoisted_19 = { class: "text-body-2 text-grey" };
 
 const {ref,computed,onMounted,inject} = await importShared('vue');
 
@@ -68,11 +80,13 @@ const _sfc_main = {
   props: {
   api: { type: Object, default: () => ({}) },
   nativeSubscribe: { type: Function, default: null },
+  show_switch: { type: Boolean, default: true },
 },
   emits: ['action', 'switch', 'close'],
   setup(__props, { emit: __emit }) {
 
 const props = __props;
+const emit = __emit;
 const toast = inject('moviepilot:toast', null);
 
 const loading = ref(false);
@@ -288,7 +302,7 @@ return (_ctx, _cache) => {
       variant: "tonal",
       density: "compact"
     }, {
-      default: _withCtx(() => [...(_cache[11] || (_cache[11] = [
+      default: _withCtx(() => [...(_cache[12] || (_cache[12] = [
         _createTextVNode(" 目录版块展示目标目录下的一级专辑，点击专辑筛选右侧文件记录列表；删除仅作用于目标目录下的该专辑及其记录，不影响源（监控）目录。 ", -1)
       ]))]),
       _: 1
@@ -308,7 +322,7 @@ return (_ctx, _cache) => {
               variant: "flat",
               onClick: load
             }, {
-              default: _withCtx(() => [...(_cache[12] || (_cache[12] = [
+              default: _withCtx(() => [...(_cache[13] || (_cache[13] = [
                 _createTextVNode("刷新列表", -1)
               ]))]),
               _: 1
@@ -326,7 +340,7 @@ return (_ctx, _cache) => {
               variant: "tonal",
               onClick: syncAll
             }, {
-              default: _withCtx(() => [...(_cache[13] || (_cache[13] = [
+              default: _withCtx(() => [...(_cache[14] || (_cache[14] = [
                 _createTextVNode("立即全量同步", -1)
               ]))]),
               _: 1
@@ -345,7 +359,7 @@ return (_ctx, _cache) => {
               "prepend-icon": "mdi-delete-outline",
               onClick: askClear
             }, {
-              default: _withCtx(() => [...(_cache[14] || (_cache[14] = [
+              default: _withCtx(() => [...(_cache[15] || (_cache[15] = [
                 _createTextVNode(" 清空全部目标目录 ", -1)
               ]))]),
               _: 1
@@ -367,7 +381,7 @@ return (_ctx, _cache) => {
               cols: "12",
               sm: "auto"
             }, {
-              default: _withCtx(() => [...(_cache[15] || (_cache[15] = [
+              default: _withCtx(() => [...(_cache[16] || (_cache[16] = [
                 _createElementVNode("span", { class: "text-caption text-grey-darken-1" }, "切换监控目录：", -1)
               ]))]),
               _: 1
@@ -417,7 +431,7 @@ return (_ctx, _cache) => {
           cols: "12",
           sm: "auto"
         }, {
-          default: _withCtx(() => [...(_cache[16] || (_cache[16] = [
+          default: _withCtx(() => [...(_cache[17] || (_cache[17] = [
             _createElementVNode("span", { class: "text-caption text-grey-darken-1" }, "每页条数：", -1)
           ]))]),
           _: 1
@@ -531,25 +545,27 @@ return (_ctx, _cache) => {
                                 (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(pagedAlbums.value, (album) => {
                                   return (_openBlock(), _createElementBlock("div", {
                                     key: album.name,
-                                    class: _normalizeClass(["d-flex align-center ga-1 py-1 px-2", curDir.value === album.name ? 'bg-primary-lighten-5 rounded' : ''])
+                                    class: _normalizeClass(["d-flex align-center ga-1 py-1 px-2 album-row", curDir.value === album.name ? 'bg-primary-lighten-5 rounded' : ''])
                                   }, [
-                                    _createVNode(_component_v_btn, {
-                                      size: "small",
-                                      variant: "text",
-                                      color: "primary",
-                                      justify: "start",
-                                      class: "text-truncate",
-                                      style: {"flex":"1 1 auto","min-width":"0"},
-                                      "prepend-icon": curDir.value === album.name ? 'mdi-check' : 'mdi-folder',
+                                    _createElementVNode("div", {
+                                      class: "d-flex align-center flex-grow-1 album-name",
+                                      style: {"min-width":"0","cursor":"pointer"},
                                       onClick: $event => (selectDir(album.name))
-                                    }, {
-                                      default: _withCtx(() => [
-                                        _createTextVNode(_toDisplayString(album.name) + "（" + _toDisplayString(album.count) + "） ", 1)
-                                      ]),
-                                      _: 2
-                                    }, 1032, ["prepend-icon", "onClick"]),
+                                    }, [
+                                      _createVNode(_component_v_icon, {
+                                        size: "small",
+                                        class: "me-1 flex-shrink-0",
+                                        color: curDir.value === album.name ? 'primary' : 'grey-darken-1'
+                                      }, {
+                                        default: _withCtx(() => [
+                                          _createTextVNode(_toDisplayString(curDir.value === album.name ? 'mdi-check' : 'mdi-folder'), 1)
+                                        ]),
+                                        _: 2
+                                      }, 1032, ["color"]),
+                                      _createElementVNode("span", _hoisted_7, _toDisplayString(album.name) + "（" + _toDisplayString(album.count) + "）", 1)
+                                    ], 8, _hoisted_6),
                                     (album.last_time)
-                                      ? (_openBlock(), _createElementBlock("span", _hoisted_6, _toDisplayString(album.last_time), 1))
+                                      ? (_openBlock(), _createElementBlock("span", _hoisted_8, _toDisplayString(album.last_time), 1))
                                       : _createCommentVNode("", true),
                                     _createVNode(_component_v_btn, {
                                       icon: "",
@@ -561,7 +577,7 @@ return (_ctx, _cache) => {
                                     }, {
                                       default: _withCtx(() => [
                                         _createVNode(_component_v_icon, { size: "small" }, {
-                                          default: _withCtx(() => [...(_cache[17] || (_cache[17] = [
+                                          default: _withCtx(() => [...(_cache[18] || (_cache[18] = [
                                             _createTextVNode("mdi-delete-outline", -1)
                                           ]))]),
                                           _: 1
@@ -574,51 +590,56 @@ return (_ctx, _cache) => {
                                 (curMonObj.value?.root_files?.length)
                                   ? (_openBlock(), _createElementBlock("div", {
                                       key: 0,
-                                      class: _normalizeClass(["d-flex align-center ga-1 py-1 px-2", curDir.value === ROOT ? 'bg-primary-lighten-5 rounded' : ''])
+                                      class: _normalizeClass(["d-flex align-center ga-1 py-1 px-2 album-row", curDir.value === ROOT ? 'bg-primary-lighten-5 rounded' : ''])
                                     }, [
-                                      _createVNode(_component_v_btn, {
-                                        size: "small",
-                                        variant: "text",
-                                        justify: "start",
-                                        class: "text-truncate",
-                                        style: {"flex":"1 1 auto","min-width":"0"},
-                                        "prepend-icon": curDir.value === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted',
+                                      _createElementVNode("div", {
+                                        class: "d-flex align-center flex-grow-1 album-name",
+                                        style: {"min-width":"0","cursor":"pointer"},
                                         onClick: _cache[4] || (_cache[4] = $event => (selectDir(ROOT)))
-                                      }, {
-                                        default: _withCtx(() => [
-                                          _createTextVNode(" 根目录下文件（" + _toDisplayString(curMonObj.value.root_files.length) + "） ", 1)
-                                        ]),
-                                        _: 1
-                                      }, 8, ["prepend-icon"])
+                                      }, [
+                                        _createVNode(_component_v_icon, {
+                                          size: "small",
+                                          class: "me-1 flex-shrink-0",
+                                          color: curDir.value === ROOT ? 'primary' : 'grey-darken-1'
+                                        }, {
+                                          default: _withCtx(() => [
+                                            _createTextVNode(_toDisplayString(curDir.value === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted'), 1)
+                                          ]),
+                                          _: 1
+                                        }, 8, ["color"]),
+                                        _createElementVNode("span", _hoisted_9, "根目录下文件（" + _toDisplayString(curMonObj.value.root_files.length) + "）", 1)
+                                      ])
                                     ], 2))
                                   : _createCommentVNode("", true),
                                 (filteredAlbums.value.length === 0 && !curMonObj.value?.root_files?.length)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_7, " 该监控目录暂无转移记录 "))
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_10, " 该监控目录暂无转移记录 "))
                                   : _createCommentVNode("", true),
                                 (filteredAlbums.value.length === 0 && search.value)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_8, " 未找到匹配「" + _toDisplayString(search.value) + "」的专辑 ", 1))
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_11, " 未找到匹配「" + _toDisplayString(search.value) + "」的专辑 ", 1))
                                   : _createCommentVNode("", true)
                               ], 64))
                             : (_openBlock(), _createElementBlock(_Fragment, { key: 2 }, [
                                 (selectedRow.value)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_9, [
-                                      _createVNode(_component_v_btn, {
-                                        size: "small",
-                                        variant: "text",
-                                        color: "primary",
-                                        justify: "start",
-                                        class: "text-truncate",
-                                        style: {"flex":"1 1 auto","min-width":"0"},
-                                        "prepend-icon": "mdi-check",
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_12, [
+                                      _createElementVNode("div", {
+                                        class: "d-flex align-center flex-grow-1 album-name",
+                                        style: {"min-width":"0","cursor":"pointer"},
                                         onClick: _cache[5] || (_cache[5] = $event => (collapsed.value = false))
-                                      }, {
-                                        default: _withCtx(() => [
-                                          _createTextVNode(_toDisplayString(selectedRow.value.name) + "（" + _toDisplayString(selectedRow.value.count) + "） ", 1)
-                                        ]),
-                                        _: 1
-                                      }),
+                                      }, [
+                                        _createVNode(_component_v_icon, {
+                                          size: "small",
+                                          class: "me-1 flex-shrink-0",
+                                          color: "primary"
+                                        }, {
+                                          default: _withCtx(() => [...(_cache[19] || (_cache[19] = [
+                                            _createTextVNode("mdi-check", -1)
+                                          ]))]),
+                                          _: 1
+                                        }),
+                                        _createElementVNode("span", _hoisted_13, _toDisplayString(selectedRow.value.name) + "（" + _toDisplayString(selectedRow.value.count) + "）", 1)
+                                      ]),
                                       (selectedRow.value.last_time)
-                                        ? (_openBlock(), _createElementBlock("span", _hoisted_10, _toDisplayString(selectedRow.value.last_time), 1))
+                                        ? (_openBlock(), _createElementBlock("span", _hoisted_14, _toDisplayString(selectedRow.value.last_time), 1))
                                         : _createCommentVNode("", true),
                                       (!selectedRow.value.isRoot)
                                         ? (_openBlock(), _createBlock(_component_v_btn, {
@@ -632,7 +653,7 @@ return (_ctx, _cache) => {
                                           }, {
                                             default: _withCtx(() => [
                                               _createVNode(_component_v_icon, { size: "small" }, {
-                                                default: _withCtx(() => [...(_cache[18] || (_cache[18] = [
+                                                default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
                                                   _createTextVNode("mdi-delete-outline", -1)
                                                 ]))]),
                                                 _: 1
@@ -693,7 +714,7 @@ return (_ctx, _cache) => {
                     }, {
                       default: _withCtx(() => [
                         (loading.value)
-                          ? (_openBlock(), _createElementBlock("div", _hoisted_11, [
+                          ? (_openBlock(), _createElementBlock("div", _hoisted_15, [
                               _createVNode(_component_v_progress_linear, { indeterminate: "" })
                             ]))
                           : (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
@@ -707,7 +728,7 @@ return (_ctx, _cache) => {
                                     color: "grey",
                                     class: "flex-shrink-0"
                                   }, {
-                                    default: _withCtx(() => [...(_cache[19] || (_cache[19] = [
+                                    default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
                                       _createTextVNode("mdi-music-note-plus", -1)
                                     ]))]),
                                     _: 1
@@ -716,9 +737,9 @@ return (_ctx, _cache) => {
                                     class: "text-body-2 text-truncate",
                                     style: {"flex":"1 1 auto","min-width":"0"},
                                     title: f.rel
-                                  }, _toDisplayString(f.rel), 9, _hoisted_12),
+                                  }, _toDisplayString(f.rel), 9, _hoisted_16),
                                   (f.time)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_13, _toDisplayString(f.time), 1))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_17, _toDisplayString(f.time), 1))
                                     : _createCommentVNode("", true),
                                   (f.mode)
                                     ? (_openBlock(), _createBlock(_component_v_chip, {
@@ -737,7 +758,7 @@ return (_ctx, _cache) => {
                                 ]))
                               }), 128)),
                               (pagedFiles.value.length === 0)
-                                ? (_openBlock(), _createElementBlock("div", _hoisted_14, " 当前目录暂无已转移文件记录。 "))
+                                ? (_openBlock(), _createElementBlock("div", _hoisted_18, " 当前目录暂无已转移文件记录。 "))
                                 : _createCommentVNode("", true)
                             ], 64))
                       ]),
@@ -785,7 +806,7 @@ return (_ctx, _cache) => {
             }),
             _createVNode(_component_v_card_text, null, {
               default: _withCtx(() => [
-                _createElementVNode("p", _hoisted_15, _toDisplayString(confirm.value.text), 1),
+                _createElementVNode("p", _hoisted_19, _toDisplayString(confirm.value.text), 1),
                 _createVNode(_component_v_list, { density: "compact" }, {
                   default: _withCtx(() => [
                     (_openBlock(), _createElementBlock(_Fragment, null, _renderList(confirmModes, (mode) => {
@@ -835,7 +856,7 @@ return (_ctx, _cache) => {
                   variant: "text",
                   onClick: _cache[9] || (_cache[9] = $event => (confirm.value.show = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
+                  default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
                     _createTextVNode("取消", -1)
                   ]))]),
                   _: 1
@@ -845,7 +866,7 @@ return (_ctx, _cache) => {
                   variant: "flat",
                   onClick: runConfirm
                 }, {
-                  default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
+                  default: _withCtx(() => [...(_cache[23] || (_cache[23] = [
                     _createTextVNode("确认执行", -1)
                   ]))]),
                   _: 1
@@ -858,11 +879,36 @@ return (_ctx, _cache) => {
         })
       ]),
       _: 1
-    }, 8, ["modelValue"])
+    }, 8, ["modelValue"]),
+    (__props.show_switch)
+      ? (_openBlock(), _createBlock(_component_v_btn, {
+          key: 3,
+          icon: "",
+          color: "primary",
+          size: "large",
+          rounded: "circle",
+          elevation: "4",
+          class: "position-fixed",
+          style: {"bottom":"24px","right":"24px","z-index":"120"},
+          title: "插件设置",
+          onClick: _cache[11] || (_cache[11] = $event => (emit('switch')))
+        }, {
+          default: _withCtx(() => [
+            _createVNode(_component_v_icon, null, {
+              default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
+                _createTextVNode("mdi-cog", -1)
+              ]))]),
+              _: 1
+            })
+          ]),
+          _: 1
+        }))
+      : _createCommentVNode("", true)
   ]))
 }
 }
 
 };
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-3a1bcdf5"]]);
 
-export { _sfc_main as default };
+export { Page as default };

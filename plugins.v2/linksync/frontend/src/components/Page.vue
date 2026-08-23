@@ -5,6 +5,7 @@ import { ref, computed, onMounted, inject } from 'vue'
 const props = defineProps({
   api: { type: Object, default: () => ({}) },
   nativeSubscribe: { type: Function, default: null },
+  show_switch: { type: Boolean, default: true },
 })
 const emit = defineEmits(['action', 'switch', 'close'])
 const toast = inject('moviepilot:toast', null)
@@ -200,7 +201,7 @@ function onPageSizeChange() {
 <template>
   <div
     class="plugin-page d-flex flex-column ga-3"
-    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable"
+    style="overflow-x: hidden; overflow-y: auto; max-width: 100%; min-width: 0; max-height: calc(100dvh - 170px); scrollbar-gutter: stable; padding: 16px; box-sizing: border-box"
   >
     <v-alert type="info" variant="tonal" density="compact">
       目录版块展示目标目录下的一级专辑，点击专辑筛选右侧文件记录列表；删除仅作用于目标目录下的该专辑及其记录，不影响源（监控）目录。
@@ -297,21 +298,23 @@ function onPageSizeChange() {
               <div
                 v-for="album in pagedAlbums"
                 :key="album.name"
-                class="d-flex align-center ga-1 py-1 px-2"
+                class="d-flex align-center ga-1 py-1 px-2 album-row"
                 :class="curDir === album.name ? 'bg-primary-lighten-5 rounded' : ''"
               >
-                <v-btn
-                  size="small"
-                  variant="text"
-                  color="primary"
-                  justify="start"
-                  class="text-truncate"
-                  style="flex: 1 1 auto; min-width: 0"
-                  :prepend-icon="curDir === album.name ? 'mdi-check' : 'mdi-folder'"
+                <div
+                  class="d-flex align-center flex-grow-1 album-name"
+                  style="min-width: 0; cursor: pointer"
                   @click="selectDir(album.name)"
                 >
-                  {{ album.name }}（{{ album.count }}）
-                </v-btn>
+                  <v-icon
+                    size="small"
+                    class="me-1 flex-shrink-0"
+                    :color="curDir === album.name ? 'primary' : 'grey-darken-1'"
+                  >
+                    {{ curDir === album.name ? 'mdi-check' : 'mdi-folder' }}
+                  </v-icon>
+                  <span class="text-truncate text-body-2">{{ album.name }}（{{ album.count }}）</span>
+                </div>
                 <span v-if="album.last_time" class="text-caption text-grey flex-shrink-0 ms-1">
                   {{ album.last_time }}
                 </span>
@@ -329,20 +332,23 @@ function onPageSizeChange() {
               <!-- 根目录下文件查看行 -->
               <div
                 v-if="curMonObj?.root_files?.length"
-                class="d-flex align-center ga-1 py-1 px-2"
+                class="d-flex align-center ga-1 py-1 px-2 album-row"
                 :class="curDir === ROOT ? 'bg-primary-lighten-5 rounded' : ''"
               >
-                <v-btn
-                  size="small"
-                  variant="text"
-                  justify="start"
-                  class="text-truncate"
-                  style="flex: 1 1 auto; min-width: 0"
-                  :prepend-icon="curDir === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted'"
+                <div
+                  class="d-flex align-center flex-grow-1 album-name"
+                  style="min-width: 0; cursor: pointer"
                   @click="selectDir(ROOT)"
                 >
-                  根目录下文件（{{ curMonObj.root_files.length }}）
-                </v-btn>
+                  <v-icon
+                    size="small"
+                    class="me-1 flex-shrink-0"
+                    :color="curDir === ROOT ? 'primary' : 'grey-darken-1'"
+                  >
+                    {{ curDir === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted' }}
+                  </v-icon>
+                  <span class="text-truncate text-body-2">根目录下文件（{{ curMonObj.root_files.length }}）</span>
+                </div>
               </div>
               <div v-if="filteredAlbums.length === 0 && !curMonObj?.root_files?.length" class="text-grey text-caption pa-2">
                 该监控目录暂无转移记录
@@ -353,19 +359,15 @@ function onPageSizeChange() {
             </template>
             <!-- 折叠后仅保留当前选中行 -->
             <template v-else>
-              <div v-if="selectedRow" class="d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded">
-                <v-btn
-                  size="small"
-                  variant="text"
-                  color="primary"
-                  justify="start"
-                  class="text-truncate"
-                  style="flex: 1 1 auto; min-width: 0"
-                  prepend-icon="mdi-check"
+              <div v-if="selectedRow" class="d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded album-row">
+                <div
+                  class="d-flex align-center flex-grow-1 album-name"
+                  style="min-width: 0; cursor: pointer"
                   @click="collapsed = false"
                 >
-                  {{ selectedRow.name }}（{{ selectedRow.count }}）
-                </v-btn>
+                  <v-icon size="small" class="me-1 flex-shrink-0" color="primary">mdi-check</v-icon>
+                  <span class="text-truncate text-body-2">{{ selectedRow.name }}（{{ selectedRow.count }}）</span>
+                </div>
                 <span v-if="selectedRow.last_time" class="text-caption text-grey flex-shrink-0 ms-1">
                   {{ selectedRow.last_time }}
                 </span>
@@ -452,5 +454,28 @@ function onPageSizeChange() {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- 右下角跳转设置页按钮（与主应用 Vuetify 渲染模式的 VFab 一致） -->
+    <v-btn
+      v-if="show_switch"
+      icon
+      color="primary"
+      size="large"
+      rounded="circle"
+      elevation="4"
+      class="position-fixed"
+      style="bottom: 24px; right: 24px; z-index: 120"
+      title="插件设置"
+      @click="emit('switch')"
+    >
+      <v-icon>mdi-cog</v-icon>
+    </v-btn>
   </div>
 </template>
+
+<style scoped>
+/* 目录条目悬停反馈（左对齐文本区域） */
+.album-name:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+</style>

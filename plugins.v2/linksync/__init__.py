@@ -230,7 +230,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.10"
+    plugin_version = "1.11"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
