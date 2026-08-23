@@ -7,6 +7,7 @@ import datetime
 import re
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
 
@@ -22,8 +23,6 @@ from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType, NotificationType
 from app.utils.system import SystemUtils
-
-lock = threading.Lock()
 
 # 转移方式中文描述
 TRANSFER_NAMES: Dict[str, str] = {
@@ -208,7 +207,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.0"
+    plugin_version = "1.1"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -233,6 +232,10 @@ class LinkSync(_PluginBase):
     _exclude_keywords = ""
     # 转移方式 copy/move/link
     _transfer_type = "link"
+    # 通知防抖汇总间隔（秒），实时事件在该间隔内聚合为一条通知
+    _flush_interval = 3
+    # 全量同步并发转移数
+    _concurrency = 4
 
     # 模式 compatibility/fast
     _mode = "fast"
@@ -240,6 +243,13 @@ class LinkSync(_PluginBase):
     _dirconf: Dict[str, Optional[Path]] = {}
     # 退出事件
     _event = threading.Event()
+    # 转移结果统计（用于通知汇总）
+    _notify_success = 0
+    _notify_fail = 0
+    _notify_lock = threading.Lock()
+    _flush_timer = None
+    # 并发转移线程池
+    _executor: Optional[ThreadPoolExecutor] = None
 
     def init_plugin(self, config: dict = None):
         # 清空配置
@@ -256,11 +266,20 @@ class LinkSync(_PluginBase):
             self._transfer_type = config.get("transfer_type") or "link"
             self._cron = config.get("cron")
             self._size = config.get("size") or 0
+            self._flush_interval = abs(int(config.get("flush_interval") or 3))
+            self._concurrency = max(1, int(config.get("concurrency") or 4))
 
         # 停止现有任务
         self.stop_service()
 
+        # 重置转移结果统计
+        self.__reset_notify()
+
         if self._enabled or self._onlyonce:
+
+            # 初始化并发转移线程池
+            self._executor = ThreadPoolExecutor(max_workers=self._concurrency,
+                                                thread_name_prefix="linksync")
 
             # 读取目录配置
             monitor_dirs = self._monitor_dirs.split("\n")
@@ -361,7 +380,9 @@ class LinkSync(_PluginBase):
             "monitor_dirs": self._monitor_dirs,
             "exclude_keywords": self._exclude_keywords,
             "cron": self._cron,
-            "size": self._size
+            "size": self._size,
+            "flush_interval": self._flush_interval,
+            "concurrency": self._concurrency
         })
 
     @eventmanager.register(EventType.PluginAction)
@@ -386,11 +407,26 @@ class LinkSync(_PluginBase):
         立即运行一次，全量同步目录中所有文件
         """
         logger.info("开始全量实时同步 ...")
-        # 遍历所有监控目录
+        # 重置统计与待发送通知
+        self.__cancel_flush()
+        self.__reset_notify()
+        # 收集所有待处理文件
+        tasks = []
         for mon_path in self._dirconf.keys():
             # 遍历目录下所有文件
             for file_path in SystemUtils.list_files(Path(mon_path), ['.*']):
-                self.__handle_file(event_path=str(file_path), mon_path=mon_path)
+                tasks.append((str(file_path), mon_path))
+        # 并发转移
+        if self._executor and tasks:
+            try:
+                list(self._executor.map(lambda item: self.__handle_file(item[0], item[1]), tasks))
+            except Exception as e:
+                logger.error(f"全量实时同步发生错误：{e}")
+        else:
+            for file_path, mon_path in tasks:
+                self.__handle_file(file_path, mon_path)
+        # 立即汇总发送一次通知
+        self.__flush_notify()
         logger.info("全量实时同步完成！")
 
     def event_handler(self, event, mon_path: str, text: str, event_path: str):
@@ -404,7 +440,10 @@ class LinkSync(_PluginBase):
         if not event.is_directory:
             # 文件发生变化
             logger.debug("文件%s：%s" % (text, event_path))
-            self.__handle_file(event_path=event_path, mon_path=mon_path)
+            if self._executor:
+                self._executor.submit(self.__handle_file, event_path, mon_path)
+            else:
+                self.__handle_file(event_path, mon_path)
 
     @staticmethod
     def _transfer_file(src_path: Path, mon_path: str,
@@ -434,7 +473,12 @@ class LinkSync(_PluginBase):
             elif transfer_type == "move":
                 code, errmsg = SystemUtils.move(src_path, new_path)
             else:
-                code, errmsg = SystemUtils.link(src_path, new_path)
+                # 直接硬链接，避免 SystemUtils.link 的中间重命名损耗
+                try:
+                    new_path.hardlink_to(src_path)
+                    code, errmsg = 0, ""
+                except Exception as err:
+                    code, errmsg = -1, str(err)
             return True if code == 0 else False, errmsg
 
     def __handle_file(self, event_path: str, mon_path: str):
@@ -449,66 +493,113 @@ class LinkSync(_PluginBase):
                 return
             if _is_download_tmp_file(file_path):
                 return
-            # 全程加锁
-            with lock:
 
-                # 回收站及隐藏的文件不处理
-                if event_path.find('/@Recycle/') != -1 \
-                        or event_path.find('/#recycle/') != -1 \
-                        or event_path.find('/.') != -1 \
-                        or event_path.find('/@eaDir') != -1:
-                    logger.debug(f"{event_path} 是回收站或隐藏的文件")
-                    return
+            # 回收站及隐藏的文件不处理
+            if event_path.find('/@Recycle/') != -1 \
+                    or event_path.find('/#recycle/') != -1 \
+                    or event_path.find('/.') != -1 \
+                    or event_path.find('/@eaDir') != -1:
+                logger.debug(f"{event_path} 是回收站或隐藏的文件")
+                return
 
-                # 命中过滤关键字不处理
-                if self._exclude_keywords:
-                    for keyword in self._exclude_keywords.split("\n"):
-                        if keyword and re.findall(keyword, event_path):
-                            logger.info(f"{event_path} 命中过滤关键字 {keyword}，不处理")
-                            return
+            # 命中过滤关键字不处理
+            if self._exclude_keywords:
+                for keyword in self._exclude_keywords.split("\n"):
+                    if keyword and re.findall(keyword, event_path):
+                        logger.info(f"{event_path} 命中过滤关键字 {keyword}，不处理")
+                        return
 
-                # 判断文件大小，小于最小文件大小的文件直接复制，其余按配置的转移方式处理
-                if self._size and float(self._size) > 0 and file_path.stat().st_size < float(self._size) * 1024:
-                    logger.info(f"{event_path} 文件大小小于最小文件大小，复制...")
-                    _transfer_type = "copy"
+            # 判断文件大小，小于最小文件大小的文件直接复制，其余按配置的转移方式处理
+            if self._size and float(self._size) > 0 and file_path.stat().st_size < float(self._size) * 1024:
+                logger.info(f"{event_path} 文件大小小于最小文件大小，复制...")
+                _transfer_type = "copy"
+            else:
+                _transfer_type = self._transfer_type if self._transfer_type in TRANSFER_NAMES else "link"
+
+            # 转移方式中文名
+            transfer_name = TRANSFER_NAMES.get(_transfer_type, "硬链接")
+
+            # 查询转移目的目录
+            target: Path = self._dirconf.get(mon_path)
+            if not target:
+                logger.warn(f"{mon_path} 未配置目的目录，将不会进行同步")
+                return
+
+            # 开始转移
+            state, errmsg = self._transfer_file(src_path=file_path, mon_path=mon_path,
+                                                target_path=target, transfer_type=_transfer_type)
+
+            # 统计结果，汇总到通知中
+            with self._notify_lock:
+                if state:
+                    self._notify_success += 1
+                    logger.info(f"{file_path.name} {transfer_name}成功")
                 else:
-                    _transfer_type = self._transfer_type if self._transfer_type in TRANSFER_NAMES else "link"
-
-                # 转移方式中文名
-                transfer_name = TRANSFER_NAMES.get(_transfer_type, "硬链接")
-
-                # 查询转移目的目录
-                target: Path = self._dirconf.get(mon_path)
-                if not target:
-                    logger.warn(f"{mon_path} 未配置目的目录，将不会进行同步")
-                    return
-
-                # 开始转移
-                state, errmsg = self._transfer_file(src_path=file_path, mon_path=mon_path,
-                                                    target_path=target, transfer_type=_transfer_type)
-
-                if not state:
-                    # 转移失败
+                    self._notify_fail += 1
                     logger.warn(f"{file_path.name} {transfer_name}失败：{errmsg}")
-                    if self._notify:
-                        self.post_message(
-                            mtype=NotificationType.Manual,
-                            title=f"{file_path.name} {transfer_name}失败！",
-                            text=f"原因：{errmsg or '未知'}"
-                        )
-                    return
 
-                # 转移成功
-                logger.info(f"{file_path.name} {transfer_name}成功")
-                if self._notify:
-                    self.post_message(
-                        mtype=NotificationType.Manual,
-                        title=f"{file_path.name} {transfer_name}完成！",
-                        text=f"目标目录：{target}"
-                    )
+            # 实时模式下防抖汇总通知
+            if self._notify:
+                self.__schedule_notify()
 
         except Exception as e:
+            with self._notify_lock:
+                self._notify_fail += 1
+            if self._notify:
+                self.__schedule_notify()
             logger.error("目录监控发生错误：%s - %s" % (str(e), traceback.format_exc()))
+
+    def __reset_notify(self):
+        """
+        重置转移结果统计
+        """
+        with self._notify_lock:
+            self._notify_success = 0
+            self._notify_fail = 0
+
+    def __cancel_flush(self):
+        """
+        取消尚未触发的防抖通知定时器
+        """
+        timer = self._flush_timer
+        self._flush_timer = None
+        if timer:
+            try:
+                timer.cancel()
+            except Exception:
+                pass
+
+    def __schedule_notify(self):
+        """
+        实时模式下防抖：重置定时器，间隔内不再有新事件时发送一条汇总通知
+        """
+        self.__cancel_flush()
+        if self._flush_interval <= 0:
+            self.__flush_notify()
+            return
+        timer = threading.Timer(self._flush_interval, self.__flush_notify)
+        timer.daemon = True
+        self._flush_timer = timer
+        timer.start()
+
+    def __flush_notify(self):
+        """
+        汇总发送一条转移结果通知
+        """
+        self._flush_timer = None
+        with self._notify_lock:
+            success = self._notify_success
+            fail = self._notify_fail
+            self._notify_success = 0
+            self._notify_fail = 0
+        total = success + fail
+        if not self._notify or total == 0:
+            return
+        self.post_message(
+            mtype=NotificationType.Manual,
+            title="实时同步完成！",
+            text=f"本批转移完成：成功 {success} 个，失败 {fail} 个（共 {total} 个）"
+        )
 
     def get_state(self) -> bool:
         return self._enabled
@@ -694,6 +785,45 @@ class LinkSync(_PluginBase):
                             {
                                 'component': 'VCol',
                                 'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'flush_interval',
+                                            'label': '通知汇总刷新间隔（秒）',
+                                            'placeholder': '默认3，实时事件间隔内聚合为一条通知'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VTextField',
+                                        'props': {
+                                            'model': 'concurrency',
+                                            'label': '并发转移数',
+                                            'placeholder': '默认4，全量同步并行转移数量'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        'component': 'VRow',
+                        'content': [
+                            {
+                                'component': 'VCol',
+                                'props': {
                                     'cols': 12
                                 },
                                 'content': [
@@ -771,6 +901,7 @@ class LinkSync(_PluginBase):
                                             'variant': 'tonal',
                                             'text': '转移方式：硬链接不占用额外空间、复制会生成副本、移动会删除源文件。'
                                                    '最小文件大小：小于最小文件大小的文件将直接复制，其余按转移方式处理。'
+                                                   '通知为批量汇总：全量同步结束后发送一次，实时模式下按“通知汇总刷新间隔”聚合发送。'
                                         }
                                     }
                                 ]
@@ -788,7 +919,9 @@ class LinkSync(_PluginBase):
             "monitor_dirs": "",
             "exclude_keywords": "",
             "cron": "",
-            "size": ""
+            "size": "",
+            "flush_interval": 3,
+            "concurrency": 4
         }
 
     def get_page(self) -> List[dict]:
@@ -813,3 +946,13 @@ class LinkSync(_PluginBase):
                 self._scheduler.shutdown()
                 self._event.clear()
             self._scheduler = None
+        # 关闭并发转移线程池
+        if self._executor:
+            try:
+                self._executor.shutdown(wait=False)
+            except Exception as e:
+                print(str(e))
+            self._executor = None
+        # 取消待发送的防抖通知并清理统计
+        self.__cancel_flush()
+        self.__reset_notify()
