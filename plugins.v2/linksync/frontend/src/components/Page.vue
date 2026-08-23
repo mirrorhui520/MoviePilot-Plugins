@@ -307,6 +307,7 @@ function onPageSizeChange() {
                   size="small"
                   variant="text"
                   color="primary"
+                  justify="start"
                   class="text-truncate"
                   style="flex: 1 1 auto; min-width: 0"
                   :prepend-icon="curDir === album.name ? 'mdi-check' : 'mdi-folder'"
@@ -337,6 +338,7 @@ function onPageSizeChange() {
                 <v-btn
                   size="small"
                   variant="text"
+                  justify="start"
                   class="text-truncate"
                   style="flex: 1 1 auto; min-width: 0"
                   :prepend-icon="curDir === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted'"
@@ -359,6 +361,7 @@ function onPageSizeChange() {
                   size="small"
                   variant="text"
                   color="primary"
+                  justify="start"
                   class="text-truncate"
                   style="flex: 1 1 auto; min-width: 0"
                   prepend-icon="mdi-check"

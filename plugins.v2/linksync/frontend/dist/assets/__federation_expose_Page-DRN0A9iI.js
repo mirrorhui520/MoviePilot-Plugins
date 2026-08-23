@@ -570,6 +570,7 @@ return (_ctx, _cache) => {
                                       size: "small",
                                       variant: "text",
                                       color: "primary",
+                                      justify: "start",
                                       class: "text-truncate",
                                       style: {"flex":"1 1 auto","min-width":"0"},
                                       "prepend-icon": curDir.value === album.name ? 'mdi-check' : 'mdi-folder',
@@ -611,6 +612,7 @@ return (_ctx, _cache) => {
                                       _createVNode(_component_v_btn, {
                                         size: "small",
                                         variant: "text",
+                                        justify: "start",
                                         class: "text-truncate",
                                         style: {"flex":"1 1 auto","min-width":"0"},
                                         "prepend-icon": curDir.value === ROOT ? 'mdi-check' : 'mdi-format-list-bulleted',
@@ -637,6 +639,7 @@ return (_ctx, _cache) => {
                                         size: "small",
                                         variant: "text",
                                         color: "primary",
+                                        justify: "start",
                                         class: "text-truncate",
                                         style: {"flex":"1 1 auto","min-width":"0"},
                                         "prepend-icon": "mdi-check",
