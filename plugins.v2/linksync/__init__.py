@@ -230,7 +230,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.7"
+    plugin_version = "1.8"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -1616,7 +1616,7 @@ class LinkSync(_PluginBase):
                 {"component": "VCardTitle",
                  "props": {"class": "text-subtitle-2 text-primary"},
                  "content": [{"component": "div",
-                              "text": f"目录版块 — {'目标目录：' + tgt_root + ' / ' if tgt_root else ''}一级专辑（点击切换下方列表）"}]},
+                              "text": f"目录版块 — {'目标目录：' + str(tgt_root) + ' / ' if tgt_root else ''}一级专辑（点击切换下方列表）"}]},
                 {"component": "VCardText",
                  "props": {"class": "pa-1"},
                  "content": album_rows if album_rows else
