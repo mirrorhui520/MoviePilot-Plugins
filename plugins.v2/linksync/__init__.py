@@ -207,7 +207,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.1"
+    plugin_version = "1.2"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -236,6 +236,8 @@ class LinkSync(_PluginBase):
     _flush_interval = 3
     # 全量同步并发转移数
     _concurrency = 4
+    # 目标文件已存在时的处理方式 skip/overwrite
+    _exists_mode = "skip"
 
     # 模式 compatibility/fast
     _mode = "fast"
@@ -268,6 +270,7 @@ class LinkSync(_PluginBase):
             self._size = config.get("size") or 0
             self._flush_interval = abs(int(config.get("flush_interval") or 3))
             self._concurrency = max(1, int(config.get("concurrency") or 4))
+            self._exists_mode = config.get("exists_mode") or "skip"
 
         # 停止现有任务
         self.stop_service()
@@ -382,7 +385,8 @@ class LinkSync(_PluginBase):
             "cron": self._cron,
             "size": self._size,
             "flush_interval": self._flush_interval,
-            "concurrency": self._concurrency
+            "concurrency": self._concurrency,
+            "exists_mode": self._exists_mode
         })
 
     @eventmanager.register(EventType.PluginAction)
@@ -447,13 +451,15 @@ class LinkSync(_PluginBase):
 
     @staticmethod
     def _transfer_file(src_path: Path, mon_path: str,
-                       target_path: Path, transfer_type: str = "link") -> Tuple[bool, str]:
+                       target_path: Path, transfer_type: str = "link",
+                       exists_mode: str = "skip") -> Tuple[bool, str]:
         """
         对文件做纯同步处理，不做识别重命名，提供监控模块调用
         :param src_path: 源文件
         :param mon_path: 监控目录
         :param target_path: 目标目录
         :param transfer_type: 转移方式 copy/move/link
+        :param exists_mode: 目标文件已存在时的处理方式 skip/overwrite
         """
         # 计算相对路径
         try:
@@ -461,25 +467,34 @@ class LinkSync(_PluginBase):
         except ValueError:
             return False, "文件路径不在监控目录内"
         new_path = target_path / rel_path
+
+        # 目标文件已存在
         if new_path.exists():
-            return True, "目标路径文件已存在"
-        else:
-            # 创建目标目录
-            if not new_path.parent.exists():
-                new_path.parent.mkdir(parents=True, exist_ok=True)
-            # 转移
-            if transfer_type == "copy":
-                code, errmsg = SystemUtils.copy(src_path, new_path)
-            elif transfer_type == "move":
-                code, errmsg = SystemUtils.move(src_path, new_path)
-            else:
-                # 直接硬链接，避免 SystemUtils.link 的中间重命名损耗
+            if exists_mode == "overwrite":
+                # 覆盖：先删除已存在的目标文件
                 try:
-                    new_path.hardlink_to(src_path)
-                    code, errmsg = 0, ""
+                    new_path.unlink()
                 except Exception as err:
-                    code, errmsg = -1, str(err)
-            return True if code == 0 else False, errmsg
+                    return False, f"覆盖前删除已存在文件失败：{err}"
+            else:
+                return True, "目标路径文件已存在（跳过）"
+
+        # 创建目标目录
+        if not new_path.parent.exists():
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+        # 转移
+        if transfer_type == "copy":
+            code, errmsg = SystemUtils.copy(src_path, new_path)
+        elif transfer_type == "move":
+            code, errmsg = SystemUtils.move(src_path, new_path)
+        else:
+            # 直接硬链接，避免 SystemUtils.link 的中间重命名损耗
+            try:
+                new_path.hardlink_to(src_path)
+                code, errmsg = 0, ""
+            except Exception as err:
+                code, errmsg = -1, str(err)
+        return True if code == 0 else False, errmsg
 
     def __handle_file(self, event_path: str, mon_path: str):
         """
@@ -527,7 +542,8 @@ class LinkSync(_PluginBase):
 
             # 开始转移
             state, errmsg = self._transfer_file(src_path=file_path, mon_path=mon_path,
-                                                target_path=target, transfer_type=_transfer_type)
+                                                target_path=target, transfer_type=_transfer_type,
+                                                exists_mode=self._exists_mode)
 
             # 统计结果，汇总到通知中
             with self._notify_lock:
@@ -786,7 +802,7 @@ class LinkSync(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -803,7 +819,7 @@ class LinkSync(_PluginBase):
                                 'component': 'VCol',
                                 'props': {
                                     'cols': 12,
-                                    'md': 6
+                                    'md': 4
                                 },
                                 'content': [
                                     {
@@ -812,6 +828,26 @@ class LinkSync(_PluginBase):
                                             'model': 'concurrency',
                                             'label': '并发转移数',
                                             'placeholder': '默认4，全量同步并行转移数量'
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 4
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'exists_mode',
+                                            'label': '目标已存在处理',
+                                            'items': [
+                                                {'title': '跳过', 'value': 'skip'},
+                                                {'title': '覆盖', 'value': 'overwrite'}
+                                            ]
                                         }
                                     }
                                 ]
@@ -901,6 +937,7 @@ class LinkSync(_PluginBase):
                                             'variant': 'tonal',
                                             'text': '转移方式：硬链接不占用额外空间、复制会生成副本、移动会删除源文件。'
                                                    '最小文件大小：小于最小文件大小的文件将直接复制，其余按转移方式处理。'
+                                                   '目标已存在处理：跳过则不重复转移，覆盖会先删除已存在目标再转移。'
                                                    '通知为批量汇总：全量同步结束后发送一次，实时模式下按“通知汇总刷新间隔”聚合发送。'
                                         }
                                     }
@@ -921,7 +958,8 @@ class LinkSync(_PluginBase):
             "cron": "",
             "size": "",
             "flush_interval": 3,
-            "concurrency": 4
+            "concurrency": 4,
+            "exists_mode": "skip"
         }
 
     def get_page(self) -> List[dict]:
