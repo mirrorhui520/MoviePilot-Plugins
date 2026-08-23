@@ -230,7 +230,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.6"
+    plugin_version = "1.7"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -1461,9 +1461,9 @@ class LinkSync(_PluginBase):
                             "component": "VAlert",
                             "props": {"type": "info", "variant": "tonal",
                                       "density": "comfortable"},
-                            "text": "下方目录版块按目标目录下的一级专辑目录列出转移记录，"
-                                    "点击某个专辑目录，下方文件记录列表即筛选出该专辑下所有已转移文件（仅展示、不逐条删除）。"
-                                    "每个专辑提供三种删除模式：「文件+记录」同时删除该专辑及其记录、「仅删文件」只删真实文件、「仅清记录」只清除记录。"
+                            "text": "下方目录版块展示的专辑是目标目录下的一级专辑（由转移记录生成）。"
+                                    "点击某个专辑，下方文件记录列表即筛选出该专辑下所有已转移文件（仅展示、不逐条删除）。"
+                                    "每个专辑的删除（「文件+记录」/「仅删文件」/「仅清记录」）仅作用于目标目录下的该专辑目录及其记录，不影响源（监控）目录。"
                                     "记录存于插件自身数据，与日志相互独立。",
                         }
                     ],
@@ -1547,6 +1547,8 @@ class LinkSync(_PluginBase):
         ui = self.__get_ui()
         cur_mon = ui.get("mon") if ui.get("mon") in mons else mons[0]
         rels = by_mon[cur_mon]
+        # 目标目录根（用于标题提示删除作用于目标目录）
+        tgt_root = self.__target_root(cur_mon)
         top_rels, root_rels = self._top_dirs(rels)
         order = list(top_rels.keys())
         cur = ui.get("dir", "")
@@ -1614,7 +1616,7 @@ class LinkSync(_PluginBase):
                 {"component": "VCardTitle",
                  "props": {"class": "text-subtitle-2 text-primary"},
                  "content": [{"component": "div",
-                              "text": f"目录版块（{cur_mon}）— 点击专辑切换下方列表"}]},
+                              "text": f"目录版块 — {'目标目录：' + tgt_root + ' / ' if tgt_root else ''}一级专辑（点击切换下方列表）"}]},
                 {"component": "VCardText",
                  "props": {"class": "pa-1"},
                  "content": album_rows if album_rows else
