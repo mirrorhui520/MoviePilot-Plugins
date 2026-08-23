@@ -5,6 +5,7 @@
 """
 import datetime
 import re
+import shutil
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +34,19 @@ TRANSFER_NAMES: Dict[str, str] = {
 
 # 目标文件已存在且选择跳过时的返回标记
 EXISTS_SKIPPED = "__EXISTS_SKIPPED__"
+
+# 转移记录在插件数据中的键名（独立于日志，使用插件自身的数据存储）
+RECORD_KEY = "transferred"
+
+# 删除操作可选模式
+DELETE_MODES: Dict[str, str] = {
+    "both": "同时删除目标文件并从记录移除",
+    "target": "仅删除目标目录真实文件（保留记录）",
+    "record": "仅从记录中移除（保留目标文件）",
+}
+
+# 记录键的分隔符（避免路径包含该字符）
+RECORD_SEP = "\x00"
 
 
 def _has_suffix_in(file_path: Path, extensions: List[str]) -> bool:
@@ -210,7 +224,7 @@ class LinkSync(_PluginBase):
     # 插件图标
     plugin_icon = "sync_file.png"
     # 插件版本
-    plugin_version = "1.3"
+    plugin_version = "1.4"
     # 插件作者
     plugin_author = "mirrorhui520"
     # 作者主页
@@ -241,6 +255,8 @@ class LinkSync(_PluginBase):
     _concurrency = 4
     # 目标文件已存在时的处理方式 skip/overwrite
     _exists_mode = "skip"
+    # 详情页删除操作的默认模式 both/target/record（JSON 页面无响应式 select，故在设置中选择、页面构建时读取）
+    _delete_mode = "both"
 
     # 模式 compatibility/fast
     _mode = "fast"
@@ -277,6 +293,7 @@ class LinkSync(_PluginBase):
             self._flush_interval = abs(int(config.get("flush_interval") or 3))
             self._concurrency = max(1, int(config.get("concurrency") or 4))
             self._exists_mode = config.get("exists_mode") or "skip"
+            self._delete_mode = config.get("delete_mode") or "both"
 
         # 停止现有任务
         self.stop_service()
@@ -392,7 +409,8 @@ class LinkSync(_PluginBase):
             "size": self._size,
             "flush_interval": self._flush_interval,
             "concurrency": self._concurrency,
-            "exists_mode": self._exists_mode
+            "exists_mode": self._exists_mode,
+            "delete_mode": self._delete_mode
         })
 
     @eventmanager.register(EventType.PluginAction)
@@ -552,10 +570,26 @@ class LinkSync(_PluginBase):
                 logger.warn(f"{mon_path} 未配置目的目录，将不会进行同步")
                 return
 
+            # 优先跳过已有转移记录的文件：记录命中即跳过，不再走目标目录存在性查询
+            try:
+                rel = str(file_path.relative_to(Path(mon_path)))
+            except ValueError:
+                rel = ""
+            if rel and self.__record_key(mon_path, rel) in self.__get_records():
+                with self._notify_lock:
+                    self._notify_skip += 1
+                logger.info(f"{file_path.name} 已在转移记录中，跳过")
+                return
+
             # 开始转移
             state, errmsg = self._transfer_file(src_path=file_path, mon_path=mon_path,
                                                 target_path=target, transfer_type=_transfer_type,
                                                 exists_mode=self._exists_mode)
+
+            # 成功转移（非跳过）则写入转移记录，供 UI 管理与“记录命中”跳过使用
+            if state and errmsg != EXISTS_SKIPPED:
+                self.__add_record(mon_path=mon_path, src_path=file_path,
+                                  target=target, transfer_name=transfer_name)
 
             # 统计结果，汇总到通知中
             with self._notify_lock:
@@ -579,6 +613,93 @@ class LinkSync(_PluginBase):
             if self._notify and not self._full_sync:
                 self.__schedule_notify()
             logger.error("目录监控发生错误：%s - %s" % (str(e), traceback.format_exc()))
+
+    # ==================== 转移记录相关 ====================
+
+    def __record_key(self, mon_path: str, rel: str) -> str:
+        """生成记录唯一键"""
+        return f"{mon_path}{RECORD_SEP}{rel}"
+
+    def __get_records(self) -> Dict[str, dict]:
+        """读取全部转移记录（字典：记录键 -> 记录内容）"""
+        records = self.get_data(RECORD_KEY)
+        return dict(records or {})
+
+    def __save_records(self, records: Dict[str, dict]):
+        """写回全部转移记录"""
+        self.save_data(RECORD_KEY, records)
+
+    def __add_record(self, mon_path: str, src_path: Path, target: Path,
+                     transfer_name: str):
+        """
+        新增/更新一条转移记录
+        :param mon_path: 监控目录
+        :param src_path: 源文件
+        :param target: 目的目录根
+        :param transfer_name: 转移方式中文名
+        """
+        try:
+            rel = str(src_path.relative_to(Path(mon_path)))
+        except ValueError:
+            return
+        # 转移记录同步锁
+        lock = getattr(self, "_record_lock", None)
+        if lock is None:
+            lock = self._record_lock = threading.Lock()
+        with lock:
+            records = self.__get_records()
+            records[self.__record_key(mon_path, rel)] = {
+                "mon_path": mon_path,
+                "rel": rel,
+                "src": str(src_path),
+                "target": str(target / rel),
+                "mode": transfer_name,
+                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            self.__save_records(records)
+
+    def __remove_record(self, mon_path: str, rel: str) -> bool:
+        """移除一条转移记录，返回是否存在过"""
+        lock = getattr(self, "_record_lock", None)
+        if lock is None:
+            lock = self._record_lock = threading.Lock()
+        with lock:
+            records = self.__get_records()
+            key = self.__record_key(mon_path, rel)
+            if key in records:
+                del records[key]
+                self.__save_records(records)
+                return True
+        return False
+
+    def __target_root(self, mon_path: str) -> Optional[Path]:
+        """
+        获取某监控目录对应的目的目录根。
+        插件启用时优先使用内存配置；未启用时从记录中反推。
+        """
+        tgt = self._dirconf.get(mon_path)
+        if tgt:
+            return tgt
+        for rec in self.__get_records().values():
+            if rec.get("mon_path") == mon_path and rec.get("rel") and rec.get("target"):
+                root = Path(rec["target"])
+                for _ in Path(rec["rel"]).parts:
+                    root = root.parent
+                return root
+        return None
+
+    def __remove_on_disk(self, path: Path) -> Tuple[bool, str]:
+        """删除磁盘上的文件或目录"""
+        try:
+            if not path.exists():
+                return True, "目标不存在"
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink()
+            return True, ""
+        except Exception as e:
+            return False, str(e)
 
     def __reset_notify(self):
         """
@@ -659,13 +780,36 @@ class LinkSync(_PluginBase):
         }]
 
     def get_api(self) -> List[Dict[str, Any]]:
-        return [{
-            "path": "/realtime_sync",
-            "endpoint": self.sync,
-            "methods": ["GET"],
-            "summary": "实时同步",
-            "description": "实时同步",
-        }]
+        return [
+            {
+                "path": "/realtime_sync",
+                "endpoint": self.sync,
+                "methods": ["GET"],
+                "summary": "实时同步",
+                "description": "实时同步",
+            },
+            {
+                "path": "/delete",
+                "endpoint": self.delete_record,
+                "methods": ["GET"],
+                "summary": "删除转移项",
+                "description": "按模式删除目标文件/记录",
+            },
+            {
+                "path": "/clear",
+                "endpoint": self.clear,
+                "methods": ["GET"],
+                "summary": "清空目标目录",
+                "description": "清空指定监控（或不指定则全部）目的目录内容",
+            },
+            {
+                "path": "/open_settings",
+                "endpoint": self.open_settings,
+                "methods": ["GET"],
+                "summary": "跳转插件设置",
+                "description": "跳转到本插件的配置/设置页",
+            },
+        ]
 
     def get_service(self) -> List[Dict[str, Any]]:
         """
@@ -695,6 +839,110 @@ class LinkSync(_PluginBase):
             return schemas.Response(success=False, message="API密钥错误")
         self.sync_all()
         return schemas.Response(success=True)
+
+    def delete_record(self, apikey: str, mon_path: str = "", rel: str = "",
+                      mode: str = "both", is_dir: int = 0) -> schemas.Response:
+        """
+        删除转移项（文件或目录）
+        :param apikey: API 密钥
+        :param mon_path: 监控目录
+        :param rel: 相对路径（文件或目录）
+        :param mode: both/target/record
+        :param is_dir: 是否按目录删除
+        """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API密钥错误")
+        if not mon_path or not rel:
+            return schemas.Response(success=False, message="参数不完整")
+        mode = mode if mode in DELETE_MODES else "both"
+        records = self.__get_records()
+        deleted_files = 0
+        try:
+            if not is_dir:
+                # 按单文件删除
+                rec = records.get(self.__record_key(mon_path, rel))
+                if rec and mode in ("both", "target"):
+                    ok, _ = self.__remove_on_disk(Path(rec["target"]))
+                    deleted_files = 1 if ok else 0
+                if mode in ("both", "record"):
+                    self.__remove_record(mon_path, rel)
+            else:
+                # 按目录删除：删除该目录下全部目标产物与记录
+                prefix = rel.rstrip("/") + "/"
+                root = self.__target_root(mon_path)
+                folder_tgt = (root / Path(rel)) if root else None
+                if mode in ("both", "target"):
+                    if folder_tgt and not folder_tgt.is_relative_to(root.resolve()):
+                        return schemas.Response(success=False, message="非法路径")
+                    if folder_tgt:
+                        deleted_files = int(folder_tgt.exists())
+                        _ok, _ = self.__remove_on_disk(folder_tgt)
+                if mode in ("both", "record"):
+                    matched = [k for k, v in records.items()
+                               if v.get("mon_path") == mon_path
+                               and v.get("rel", "").startswith(prefix)]
+                    for k in matched:
+                        del records[k]
+                    self.__save_records(records)
+                    # 记录变化可能影响已删除文件统计
+            return schemas.Response(success=True,
+                                    message="处理完成：目标文件 %s 个" % deleted_files)
+        except Exception as e:
+            logger.error("删除转移项失败：%s - %s" % (str(e), traceback.format_exc()))
+            return schemas.Response(success=False, message=f"删除失败：{e}")
+
+    def clear(self, apikey: str, mon_path: str = "",
+              mode: str = "both") -> schemas.Response:
+        """
+        清空目的目录下所有文件与记录（不指定 mon_path 则清空全部）
+        :param apikey: API 密钥
+        :param mon_path: 监控目录，为空表示全部
+        :param mode: both/target/record
+        """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API密钥错误")
+        mode = mode if mode in DELETE_MODES else "both"
+        records = self.__get_records()
+        # 确定要处理的监控目录集合
+        mons = set(self._dirconf.keys())
+        if mon_path:
+            mons = {mon_path}
+        mons.update(r.get("mon_path") for r in records.values() if r.get("mon_path"))
+        deleted_dir, deleted_file = 0, 0
+        try:
+            for m in mons:
+                root = self.__target_root(m)
+                if root and mode in ("both", "target") and root.exists():
+                    for child in root.iterdir():
+                        try:
+                            if child.is_dir():
+                                shutil.rmtree(child, ignore_errors=True)
+                                deleted_dir += 1
+                            else:
+                                child.unlink()
+                                deleted_file += 1
+                        except Exception:
+                            pass
+                if mode in ("both", "record"):
+                    records = {k: v for k, v in records.items()
+                               if v.get("mon_path") != m}
+            if mode in ("both", "record"):
+                self.__save_records(records)
+            return schemas.Response(success=True,
+                                    message=f"清除完成：目录 {deleted_dir} 个，文件 {deleted_file} 个")
+        except Exception as e:
+            logger.error("清空目的目录失败：%s - %s" % (str(e), traceback.format_exc()))
+            return schemas.Response(success=False, message=f"清除失败：{e}")
+
+    def open_settings(self, apikey: str) -> schemas.Response:
+        """
+        跳转到本插件的配置/设置页。
+        说明：JSON 详情页难以直接切换前端 SPA 标签页，此接口作为占位，
+        前端按钮资源受限时由用户在插件卡片点“编辑/设置”进入配置页。
+        """
+        if apikey != settings.API_TOKEN:
+            return schemas.Response(success=False, message="API密钥错误")
+        return schemas.Response(success=True, message="请在本插件卡片上点击“设置/编辑”进入配置页")
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
         return [
@@ -873,6 +1121,27 @@ class LinkSync(_PluginBase):
                                         }
                                     }
                                 ]
+                            },
+                            {
+                                'component': 'VCol',
+                                'props': {
+                                    'cols': 12,
+                                    'md': 6
+                                },
+                                'content': [
+                                    {
+                                        'component': 'VSelect',
+                                        'props': {
+                                            'model': 'delete_mode',
+                                            'label': '详情页删除模式',
+                                            'items': [
+                                                {'title': '同时删除目标文件并从记录移除', 'value': 'both'},
+                                                {'title': '仅删除目标目录真实文件（保留记录）', 'value': 'target'},
+                                                {'title': '仅从记录中移除（保留目标文件）', 'value': 'record'}
+                                            ]
+                                        }
+                                    }
+                                ]
                             }
                         ]
                     },
@@ -981,11 +1250,267 @@ class LinkSync(_PluginBase):
             "size": "",
             "flush_interval": 3,
             "concurrency": 4,
-            "exists_mode": "skip"
+            "exists_mode": "skip",
+            "delete_mode": "both"
+        }
+
+    # ==================== 详情页（get_page）相关 ====================
+
+    @staticmethod
+    def _page_del_event(mon_path: str, rel: str, is_dir: int, mode: str) -> dict:
+        """构造删除单个文件/目录的前端事件"""
+        return {
+            "click": {
+                "api": "plugin/LinkSync/delete",
+                "method": "get",
+                "params": {
+                    "apikey": settings.API_TOKEN,
+                    "mon_path": mon_path,
+                    "rel": rel,
+                    "mode": mode,
+                    "is_dir": 1 if is_dir else 0,
+                }
+            }
+        }
+
+    @staticmethod
+    def _build_tree(rels: Dict[str, dict]) -> List[dict]:
+        """把 相对路径->记录 字典构造成文件夹/文件树
+
+        返回节点列表，每个节点：{name, rel, is_dir, rec, children}
+        """
+        root = []
+        for rel, rec in rels.items():
+            parts = [p for p in rel.split("/") if p]
+            level = root
+            cur_prefix = []
+            count = len(parts)
+            for i, part in enumerate(parts):
+                cur_prefix.append(part)
+                prefix = "/".join(cur_prefix)
+                node = next((n for n in level if n["name"] == part), None)
+                if node is None:
+                    node = {
+                        "name": part,
+                        "rel": prefix,
+                        "is_dir": i < count - 1,
+                        "rec": None,
+                        "children": [],
+                    }
+                    level.append(node)
+                level = node["children"]
+            # 最后一个部分即文件节点，绑定记录
+            if node is not None:
+                node["rec"] = rec
+        return root
+
+    @staticmethod
+    def _page_row(content: List[dict], indent: int) -> dict:
+        """生成一行（带缩进）"""
+        return {
+            "component": "div",
+            "props": {
+                "class": "d-flex align-center",
+                "style": f"padding-left: {indent * 16}px",
+            },
+            "content": content,
+        }
+
+    def _render_tree_rows(self, nodes: List[dict], mon_path: str, mode: str,
+                          indent: int = 0) -> List[dict]:
+        """递归生成文件树行（文件夹行 + 其子内容，文件行）"""
+        rows = []
+        for node in nodes:
+            if node["is_dir"]:
+                rows.append(self._page_row([
+                    {"component": "VIcon", "props": {"icon": "mdi-folder",
+                                                     "size": "small", "color": "warning"}},
+                    {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-2"},
+                     "text": node["rel"]},
+                    {"component": "VBtn", "props": {"size": "x-small", "color": "error",
+                                                    "variant": "tonal"}, "text": "删除目录",
+                     "events": self._page_del_event(mon_path, node["rel"], 1, mode)},
+                ], indent))
+                if node.get("children"):
+                    rows.extend(self._render_tree_rows(
+                        node["children"], mon_path, mode, indent + 1))
+            else:
+                rows.append(self._page_row([
+                    {"component": "VIcon", "props": {"icon": "mdi-file-outline",
+                                                     "size": "small", "color": "grey"}},
+                    {"component": "div", "props": {"class": "flex-grow-1 text-body-2 ms-2"},
+                     "text": node["rel"]},
+                    {"component": "VBtn", "props": {"size": "x-small", "color": "error",
+                                                    "variant": "text"}, "text": "删除",
+                     "events": self._page_del_event(mon_path, node["rel"], 0, mode)},
+                ], indent))
+        return rows
+
+    def _mon_panel(self, mon_path: str, rels: Dict[str, dict], mode: str) -> dict:
+        """一个监控目录为一个可展开面板"""
+        body = [
+            {
+                "component": "VRow",
+                "content": [
+                    {
+                        "component": "VCol",
+                        "props": {"cols": 12},
+                        "content": [
+                            {
+                                "component": "VBtn",
+                                "props": {"size": "small", "color": "error", "variant": "tonal"},
+                                "text": "清空该目标目录",
+                                "events": {
+                                    "click": {
+                                        "api": "plugin/LinkSync/clear",
+                                        "method": "get",
+                                        "params": {
+                                            "apikey": settings.API_TOKEN,
+                                            "mon_path": mon_path,
+                                            "mode": mode,
+                                        }
+                                    }
+                                },
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+        tree = self._build_tree(rels)
+        if tree:
+            body.extend(self._render_tree_rows(tree, mon_path, mode))
+        else:
+            body.append(
+                {"component": "div", "props": {"class": "text-grey text-caption"},
+                 "text": "（该监控目录暂无转移记录）"})
+        return {
+            "component": "VExpansionPanel",
+            "content": [
+                {
+                    "component": "VExpansionPanelTitle",
+                    "props": {"class": "text-caption"},
+                    "content": [
+                        {"component": "div", "text": f"{mon_path}（{len(rels)} 个文件）"}
+                    ],
+                },
+                {"component": "VExpansionPanelText", "content": body},
+            ],
         }
 
     def get_page(self) -> List[dict]:
-        pass
+        """
+        拼装插件详情展示页（管理已转移记录）：
+        - 每个监控目录下级文件夹为单位分组，可展开查看子目录与每个文件
+        - 支持删除单个文件/目录、一键清空目标目录，以及跳转后台设置入口
+        """
+        records = self.__get_records()
+        mode = self._delete_mode if self._delete_mode in DELETE_MODES else "both"
+        mode_desc = DELETE_MODES.get(mode, "同时删除目标文件并从记录移除")
+
+        # 顶部说明与操作区
+        tips_row = {
+            "component": "VRow",
+            "content": [
+                {
+                    "component": "VCol",
+                    "props": {"cols": 12},
+                    "content": [
+                        {
+                            "component": "VAlert",
+                            "props": {"type": "info", "variant": "tonal",
+                                      "density": "comfortable"},
+                            "text": f"删除操作按插件设置中的「详情页删除模式」执行，当前为：{mode_desc}。"
+                                    "进入本插件设置请点击详情弹窗右下角的齿轮图标。"
+                                    "列表记录与插件日志相互独立（记录存于插件自身数据，日志被其他插件清理不影响本条列表）。",
+                        }
+                    ],
+                }
+            ],
+        }
+        action_row = {
+            "component": "VRow",
+            "content": [
+                {
+                    "component": "VCol",
+                    "props": {"cols": 12, "md": 4},
+                    "content": [
+                        {"component": "VBtn",
+                         "props": {"color": "primary", "variant": "tonal"},
+                         "text": "立即全量同步",
+                         "events": {"click": {
+                             "api": "plugin/LinkSync/realtime_sync",
+                             "method": "get",
+                             "params": {"apikey": settings.API_TOKEN},
+                         }}}
+                    ],
+                },
+                {
+                    "component": "VCol",
+                    "props": {"cols": 12, "md": 4},
+                    "content": [
+                        {"component": "VBtn",
+                         "props": {"color": "error", "variant": "tonal"},
+                         "text": "一键清空全部目标目录",
+                         "events": {"click": {
+                             "api": "plugin/LinkSync/clear",
+                             "method": "get",
+                             "params": {"apikey": settings.API_TOKEN,
+                                        "mon_path": "", "mode": mode},
+                         }}}
+                    ],
+                },
+                {
+                    "component": "VCol",
+                    "props": {"cols": 12, "md": 4},
+                    "content": [
+                        {"component": "VBtn",
+                         "props": {"color": "grey-darken-1", "variant": "tonal"},
+                         "text": "后台设置入口",
+                         "events": {"click": {
+                             "api": "plugin/LinkSync/open_settings",
+                             "method": "get",
+                             "params": {"apikey": settings.API_TOKEN},
+                         }}}
+                    ],
+                },
+            ],
+        }
+        count_line = {
+            "component": "div",
+            "props": {"class": "text-body-2 text-grey"},
+            "text": f"共 {len(records)} 条转移记录。",
+        }
+
+        # 无记录时直接返回提示
+        if not records:
+            return [{
+                "component": "div",
+                "props": {"class": "d-flex flex-column ga-3"},
+                "content": [tips_row, {"component": "div", "props": {
+                    "class": "text-center text-grey pa-4"},
+                    "text": "暂无转移记录，新文件转移完成后会出现在这里。"}],
+            }]
+
+        # 按监控目录分组
+        by_mon: Dict[str, Dict[str, dict]] = {}
+        for rec in records.values():
+            m = rec.get("mon_path") or ""
+            by_mon.setdefault(m, {})[rec.get("rel") or ""] = rec
+
+        panels = [self._mon_panel(m, rels, mode) for m, rels in by_mon.items()]
+        return [{
+            "component": "div",
+            "props": {"class": "d-flex flex-column ga-3"},
+            "content": [
+                tips_row,
+                action_row,
+                count_line,
+                {"component": "VExpansionPanels",
+                 "props": {"multiple": True, "variant": "accordion"},
+                 "content": panels},
+            ],
+        }]
 
     def stop_service(self):
         """
