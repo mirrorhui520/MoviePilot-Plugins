@@ -7,54 +7,53 @@ const _hoisted_1 = {
   class: "plugin-page d-flex flex-column ga-3",
   style: {"overflow-x":"hidden","overflow-y":"auto","max-width":"100%","min-width":"0","max-height":"calc(100dvh - 170px)","scrollbar-gutter":"stable"}
 };
-const _hoisted_2 = { class: "d-flex align-center ga-2" };
-const _hoisted_3 = { class: "text-caption text-grey" };
-const _hoisted_4 = {
+const _hoisted_2 = { class: "text-caption text-grey" };
+const _hoisted_3 = {
   key: 1,
   class: "text-center text-grey pa-6"
 };
-const _hoisted_5 = {
+const _hoisted_4 = {
   class: "text-truncate",
   style: {"flex":"1 1 auto","min-width":"0"}
 };
-const _hoisted_6 = {
+const _hoisted_5 = {
   key: 0,
   class: "pa-4"
 };
-const _hoisted_7 = {
+const _hoisted_6 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
 };
-const _hoisted_8 = {
+const _hoisted_7 = {
   key: 1,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_9 = {
+const _hoisted_8 = {
   key: 2,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_10 = {
+const _hoisted_9 = {
   key: 0,
   class: "d-flex align-center ga-1 py-1 px-2 bg-primary-lighten-5 rounded"
 };
-const _hoisted_11 = {
+const _hoisted_10 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0 ms-1"
 };
-const _hoisted_12 = {
+const _hoisted_11 = {
   key: 0,
   class: "pa-4"
 };
-const _hoisted_13 = ["title"];
-const _hoisted_14 = {
+const _hoisted_12 = ["title"];
+const _hoisted_13 = {
   key: 0,
   class: "text-caption text-grey flex-shrink-0"
 };
-const _hoisted_15 = {
+const _hoisted_14 = {
   key: 0,
   class: "text-grey text-caption pa-2"
 };
-const _hoisted_16 = { class: "text-body-2 text-grey" };
+const _hoisted_15 = { class: "text-body-2 text-grey" };
 
 const {ref,computed,onMounted,inject} = await importShared('vue');
 
@@ -200,6 +199,7 @@ function syncAll() {
 
 // ---------------- 删除 / 清空确认弹窗 ----------------
 const confirm = ref({ show: false, title: '', text: '', api: '', params: {}, mode: '' });
+const lastMode = ref('both'); // 记忆上次使用的删除模式，下次打开弹窗默认选中
 const confirmModes = [
   { value: 'both', label: '文件+记录', color: 'error', variant: 'flat', desc: '删除目标文件并从记录移除' },
   { value: 'target', label: '仅删文件', color: 'error', variant: 'tonal', desc: '仅删除目标目录真实文件（保留记录）' },
@@ -215,7 +215,7 @@ function askDeleteAlbum(album) {
     text: `将按所选模式处理目标目录「${mon.target_root || ''}」下的专辑「${album.name}」（共 ${album.count} 个文件记录）。仅作用于目标目录，不影响源（监控）目录。`,
     api: 'delete',
     params: { mon_path: mon.mon, rel: album.name, is_dir: 1 },
-    mode: 'both',
+    mode: lastMode.value,
   };
 }
 
@@ -226,7 +226,7 @@ function askClear() {
     text: '将按所选模式处理全部监控目录对应的目标目录下所有内容（文件夹与文件）及其记录。此操作不可恢复，请谨慎操作。',
     api: 'clear',
     params: {},
-    mode: 'both',
+    mode: lastMode.value,
   };
 }
 
@@ -238,6 +238,7 @@ function runConfirm() {
   const c = confirm.value;
   const params = { ...c.params, mode: c.mode };
   confirm.value.show = false;
+  lastMode.value = c.mode; // 记住本次使用的模式，下次弹窗默认选中
   callApi(c.api, params, '处理完成');
 }
 
@@ -262,7 +263,6 @@ return (_ctx, _cache) => {
   const _component_v_alert = _resolveComponent("v-alert");
   const _component_v_btn = _resolveComponent("v-btn");
   const _component_v_col = _resolveComponent("v-col");
-  const _component_v_btn_group = _resolveComponent("v-btn-group");
   const _component_v_row = _resolveComponent("v-row");
   const _component_v_btn_toggle = _resolveComponent("v-btn-toggle");
   const _component_v_divider = _resolveComponent("v-divider");
@@ -339,50 +339,17 @@ return (_ctx, _cache) => {
           sm: "auto"
         }, {
           default: _withCtx(() => [
-            _createElementVNode("div", _hoisted_2, [
-              _cache[17] || (_cache[17] = _createElementVNode("span", { class: "text-caption text-grey-darken-1" }, "清空全部目标目录：", -1)),
-              _createVNode(_component_v_btn_group, {
-                density: "compact",
-                rounded: "sm"
-              }, {
-                default: _withCtx(() => [
-                  _createVNode(_component_v_btn, {
-                    size: "x-small",
-                    color: "error",
-                    variant: "flat",
-                    onClick: askClear
-                  }, {
-                    default: _withCtx(() => [...(_cache[14] || (_cache[14] = [
-                      _createTextVNode("文件+记录", -1)
-                    ]))]),
-                    _: 1
-                  }),
-                  _createVNode(_component_v_btn, {
-                    size: "x-small",
-                    color: "error",
-                    variant: "tonal",
-                    onClick: askClear
-                  }, {
-                    default: _withCtx(() => [...(_cache[15] || (_cache[15] = [
-                      _createTextVNode("仅删文件", -1)
-                    ]))]),
-                    _: 1
-                  }),
-                  _createVNode(_component_v_btn, {
-                    size: "x-small",
-                    color: "grey-darken-2",
-                    variant: "tonal",
-                    onClick: askClear
-                  }, {
-                    default: _withCtx(() => [...(_cache[16] || (_cache[16] = [
-                      _createTextVNode("仅清记录", -1)
-                    ]))]),
-                    _: 1
-                  })
-                ]),
-                _: 1
-              })
-            ])
+            _createVNode(_component_v_btn, {
+              color: "error",
+              variant: "tonal",
+              "prepend-icon": "mdi-delete-outline",
+              onClick: askClear
+            }, {
+              default: _withCtx(() => [...(_cache[14] || (_cache[14] = [
+                _createTextVNode(" 清空全部目标目录 ", -1)
+              ]))]),
+              _: 1
+            })
           ]),
           _: 1
         })
@@ -400,7 +367,7 @@ return (_ctx, _cache) => {
               cols: "12",
               sm: "auto"
             }, {
-              default: _withCtx(() => [...(_cache[18] || (_cache[18] = [
+              default: _withCtx(() => [...(_cache[15] || (_cache[15] = [
                 _createElementVNode("span", { class: "text-caption text-grey-darken-1" }, "切换监控目录：", -1)
               ]))]),
               _: 1
@@ -450,7 +417,7 @@ return (_ctx, _cache) => {
           cols: "12",
           sm: "auto"
         }, {
-          default: _withCtx(() => [...(_cache[19] || (_cache[19] = [
+          default: _withCtx(() => [...(_cache[16] || (_cache[16] = [
             _createElementVNode("span", { class: "text-caption text-grey-darken-1" }, "每页条数：", -1)
           ]))]),
           _: 1
@@ -490,7 +457,7 @@ return (_ctx, _cache) => {
           class: "ml-auto"
         }, {
           default: _withCtx(() => [
-            _createElementVNode("span", _hoisted_3, "共 " + _toDisplayString(data.value.total) + " 条转移记录", 1)
+            _createElementVNode("span", _hoisted_2, "共 " + _toDisplayString(data.value.total) + " 条转移记录", 1)
           ]),
           _: 1
         })
@@ -499,7 +466,7 @@ return (_ctx, _cache) => {
     }),
     _createVNode(_component_v_divider),
     (!loading.value && data.value.total === 0)
-      ? (_openBlock(), _createElementBlock("div", _hoisted_4, " 暂无转移记录，新文件转移完成后会出现在这里。 "))
+      ? (_openBlock(), _createElementBlock("div", _hoisted_3, " 暂无转移记录，新文件转移完成后会出现在这里。 "))
       : (_openBlock(), _createBlock(_component_v_row, {
           key: 2,
           dense: ""
@@ -518,7 +485,7 @@ return (_ctx, _cache) => {
                   default: _withCtx(() => [
                     _createVNode(_component_v_card_title, { class: "d-flex align-center ga-2 text-subtitle-2 text-primary" }, {
                       default: _withCtx(() => [
-                        _createElementVNode("span", _hoisted_5, "目录版块 — " + _toDisplayString(curMonObj.value?.target_root || '') + " / 一级专辑", 1),
+                        _createElementVNode("span", _hoisted_4, "目录版块 — " + _toDisplayString(curMonObj.value?.target_root || '') + " / 一级专辑", 1),
                         _createVNode(_component_v_spacer),
                         _createVNode(_component_v_text_field, {
                           modelValue: search.value,
@@ -556,7 +523,7 @@ return (_ctx, _cache) => {
                     }, {
                       default: _withCtx(() => [
                         (loading.value)
-                          ? (_openBlock(), _createElementBlock("div", _hoisted_6, [
+                          ? (_openBlock(), _createElementBlock("div", _hoisted_5, [
                               _createVNode(_component_v_progress_linear, { indeterminate: "" })
                             ]))
                           : (!collapsed.value)
@@ -582,7 +549,7 @@ return (_ctx, _cache) => {
                                       _: 2
                                     }, 1032, ["prepend-icon", "onClick"]),
                                     (album.last_time)
-                                      ? (_openBlock(), _createElementBlock("span", _hoisted_7, _toDisplayString(album.last_time), 1))
+                                      ? (_openBlock(), _createElementBlock("span", _hoisted_6, _toDisplayString(album.last_time), 1))
                                       : _createCommentVNode("", true),
                                     _createVNode(_component_v_btn, {
                                       icon: "",
@@ -594,7 +561,7 @@ return (_ctx, _cache) => {
                                     }, {
                                       default: _withCtx(() => [
                                         _createVNode(_component_v_icon, { size: "small" }, {
-                                          default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
+                                          default: _withCtx(() => [...(_cache[17] || (_cache[17] = [
                                             _createTextVNode("mdi-delete-outline", -1)
                                           ]))]),
                                           _: 1
@@ -626,15 +593,15 @@ return (_ctx, _cache) => {
                                     ], 2))
                                   : _createCommentVNode("", true),
                                 (filteredAlbums.value.length === 0 && !curMonObj.value?.root_files?.length)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_8, " 该监控目录暂无转移记录 "))
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_7, " 该监控目录暂无转移记录 "))
                                   : _createCommentVNode("", true),
                                 (filteredAlbums.value.length === 0 && search.value)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_9, " 未找到匹配「" + _toDisplayString(search.value) + "」的专辑 ", 1))
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_8, " 未找到匹配「" + _toDisplayString(search.value) + "」的专辑 ", 1))
                                   : _createCommentVNode("", true)
                               ], 64))
                             : (_openBlock(), _createElementBlock(_Fragment, { key: 2 }, [
                                 (selectedRow.value)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_10, [
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_9, [
                                       _createVNode(_component_v_btn, {
                                         size: "small",
                                         variant: "text",
@@ -651,7 +618,7 @@ return (_ctx, _cache) => {
                                         _: 1
                                       }),
                                       (selectedRow.value.last_time)
-                                        ? (_openBlock(), _createElementBlock("span", _hoisted_11, _toDisplayString(selectedRow.value.last_time), 1))
+                                        ? (_openBlock(), _createElementBlock("span", _hoisted_10, _toDisplayString(selectedRow.value.last_time), 1))
                                         : _createCommentVNode("", true),
                                       (!selectedRow.value.isRoot)
                                         ? (_openBlock(), _createBlock(_component_v_btn, {
@@ -665,7 +632,7 @@ return (_ctx, _cache) => {
                                           }, {
                                             default: _withCtx(() => [
                                               _createVNode(_component_v_icon, { size: "small" }, {
-                                                default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
+                                                default: _withCtx(() => [...(_cache[18] || (_cache[18] = [
                                                   _createTextVNode("mdi-delete-outline", -1)
                                                 ]))]),
                                                 _: 1
@@ -726,7 +693,7 @@ return (_ctx, _cache) => {
                     }, {
                       default: _withCtx(() => [
                         (loading.value)
-                          ? (_openBlock(), _createElementBlock("div", _hoisted_12, [
+                          ? (_openBlock(), _createElementBlock("div", _hoisted_11, [
                               _createVNode(_component_v_progress_linear, { indeterminate: "" })
                             ]))
                           : (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
@@ -740,7 +707,7 @@ return (_ctx, _cache) => {
                                     color: "grey",
                                     class: "flex-shrink-0"
                                   }, {
-                                    default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
+                                    default: _withCtx(() => [...(_cache[19] || (_cache[19] = [
                                       _createTextVNode("mdi-music-note-plus", -1)
                                     ]))]),
                                     _: 1
@@ -749,9 +716,9 @@ return (_ctx, _cache) => {
                                     class: "text-body-2 text-truncate",
                                     style: {"flex":"1 1 auto","min-width":"0"},
                                     title: f.rel
-                                  }, _toDisplayString(f.rel), 9, _hoisted_13),
+                                  }, _toDisplayString(f.rel), 9, _hoisted_12),
                                   (f.time)
-                                    ? (_openBlock(), _createElementBlock("span", _hoisted_14, _toDisplayString(f.time), 1))
+                                    ? (_openBlock(), _createElementBlock("span", _hoisted_13, _toDisplayString(f.time), 1))
                                     : _createCommentVNode("", true),
                                   (f.mode)
                                     ? (_openBlock(), _createBlock(_component_v_chip, {
@@ -770,7 +737,7 @@ return (_ctx, _cache) => {
                                 ]))
                               }), 128)),
                               (pagedFiles.value.length === 0)
-                                ? (_openBlock(), _createElementBlock("div", _hoisted_15, " 当前目录暂无已转移文件记录。 "))
+                                ? (_openBlock(), _createElementBlock("div", _hoisted_14, " 当前目录暂无已转移文件记录。 "))
                                 : _createCommentVNode("", true)
                             ], 64))
                       ]),
@@ -818,7 +785,7 @@ return (_ctx, _cache) => {
             }),
             _createVNode(_component_v_card_text, null, {
               default: _withCtx(() => [
-                _createElementVNode("p", _hoisted_16, _toDisplayString(confirm.value.text), 1),
+                _createElementVNode("p", _hoisted_15, _toDisplayString(confirm.value.text), 1),
                 _createVNode(_component_v_list, { density: "compact" }, {
                   default: _withCtx(() => [
                     (_openBlock(), _createElementBlock(_Fragment, null, _renderList(confirmModes, (mode) => {
@@ -868,7 +835,7 @@ return (_ctx, _cache) => {
                   variant: "text",
                   onClick: _cache[9] || (_cache[9] = $event => (confirm.value.show = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[23] || (_cache[23] = [
+                  default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
                     _createTextVNode("取消", -1)
                   ]))]),
                   _: 1
@@ -878,7 +845,7 @@ return (_ctx, _cache) => {
                   variant: "flat",
                   onClick: runConfirm
                 }, {
-                  default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
+                  default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
                     _createTextVNode("确认执行", -1)
                   ]))]),
                   _: 1

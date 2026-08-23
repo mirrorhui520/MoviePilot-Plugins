@@ -136,6 +136,7 @@ function syncAll() {
 
 // ---------------- 删除 / 清空确认弹窗 ----------------
 const confirm = ref({ show: false, title: '', text: '', api: '', params: {}, mode: '' })
+const lastMode = ref('both') // 记忆上次使用的删除模式，下次打开弹窗默认选中
 const confirmModes = [
   { value: 'both', label: '文件+记录', color: 'error', variant: 'flat', desc: '删除目标文件并从记录移除' },
   { value: 'target', label: '仅删文件', color: 'error', variant: 'tonal', desc: '仅删除目标目录真实文件（保留记录）' },
@@ -151,7 +152,7 @@ function askDeleteAlbum(album) {
     text: `将按所选模式处理目标目录「${mon.target_root || ''}」下的专辑「${album.name}」（共 ${album.count} 个文件记录）。仅作用于目标目录，不影响源（监控）目录。`,
     api: 'delete',
     params: { mon_path: mon.mon, rel: album.name, is_dir: 1 },
-    mode: 'both',
+    mode: lastMode.value,
   }
 }
 
@@ -162,7 +163,7 @@ function askClear() {
     text: '将按所选模式处理全部监控目录对应的目标目录下所有内容（文件夹与文件）及其记录。此操作不可恢复，请谨慎操作。',
     api: 'clear',
     params: {},
-    mode: 'both',
+    mode: lastMode.value,
   }
 }
 
@@ -174,6 +175,7 @@ function runConfirm() {
   const c = confirm.value
   const params = { ...c.params, mode: c.mode }
   confirm.value.show = false
+  lastMode.value = c.mode // 记住本次使用的模式，下次弹窗默认选中
   callApi(c.api, params, '处理完成')
 }
 
@@ -213,14 +215,9 @@ function onPageSizeChange() {
         <v-btn color="primary" variant="tonal" @click="syncAll">立即全量同步</v-btn>
       </v-col>
       <v-col cols="12" sm="auto">
-        <div class="d-flex align-center ga-2">
-          <span class="text-caption text-grey-darken-1">清空全部目标目录：</span>
-          <v-btn-group density="compact" rounded="sm">
-            <v-btn size="x-small" color="error" variant="flat" @click="askClear">文件+记录</v-btn>
-            <v-btn size="x-small" color="error" variant="tonal" @click="askClear">仅删文件</v-btn>
-            <v-btn size="x-small" color="grey-darken-2" variant="tonal" @click="askClear">仅清记录</v-btn>
-          </v-btn-group>
-        </div>
+        <v-btn color="error" variant="tonal" prepend-icon="mdi-delete-outline" @click="askClear">
+          清空全部目标目录
+        </v-btn>
       </v-col>
     </v-row>
 
